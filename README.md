@@ -26,18 +26,18 @@ Antigravity Agent Bridge is built around Google's official Antigravity CLI and A
 
 The first production adapter is **Antigravity for Cursor**, validated on Windows and macOS. Other agent harnesses can use direct ACP where supported, or dedicated adapters where deeper integration is needed.
 
-> **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the candidate gateway passed a real Hydrogen Low request. macOS 3.32.4 passed resource compatibility only; live UI verification is pending. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
+> **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the V1.2.1 gateway passed a real Hydrogen Low request. macOS 3.32.4 passed resource compatibility only; live UI verification is pending. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
 
 ## Download
 
-**V1.2.0 stable** · Windows x64 / macOS Apple Silicon · Verified with Cursor 3.28.7 and Antigravity CLI 1.5.18
+**V1.2.1 stable** · Windows x64 / macOS Apple Silicon · See verified host versions below · CLI 1.5.18 tested
 
-**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.0) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
+**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.1) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
 
-SHA-256 for the V1.2.0 VSIX:
+SHA-256 for the V1.2.1 VSIX:
 
 ```text
-46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb
+f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768
 ```
 
 **Installing the Antigravity desktop app alone is not sufficient.** The adapter requires Cursor and the separately installed [official Antigravity CLI (`agy`)](https://antigravity.google/docs/getting-started?tab=cli). Keep your desktop app; install the CLI only if missing, and use the official account sign-in flow. Use the dependency-check commands or agent-assisted installation below. Initial integration may require normal OS authorization; daily service switching does not require elevation or restart.
@@ -161,8 +161,8 @@ Default locations: macOS `~/.local/bin/agy`; Windows `%LOCALAPPDATA%\agy\bin\agy
 
 ### Step 2: Enable Cursor integration
 
-1. Verify the CLI and ACP are available, and complete official sign-in if needed.
-2. Download the VSIX. In Cursor's Extensions view, choose **Install from VSIX...**.
+1. Download and install the VSIX; for an existing integration, follow the upgrade instructions below first.
+2. Open the Antigravity panel; choose Install and Connect if the CLI is missing. Complete official Antigravity sign-in when requested.
 3. Open **Antigravity** from the status bar and select **Enable Native Models**.
 4. Confirm any required system permission, then fully quit and reopen Cursor.
 5. Start Service and select a model and thinking depth in Cursor's native picker. Stop Service to return to native Cursor models.
@@ -171,18 +171,18 @@ Default locations: macOS `~/.local/bin/agy`; Windows `%LOCALAPPDATA%\agy\bin\agy
 
 ### Terminal installation
 
-The following commands install the verified V1.2.0 release and check its checksum. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
+The following commands install the verified V1.2.1 release and check its checksum. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
 
 **macOS**
 
 ```bash
 set -e
-file="/tmp/antigravity-cursor-1.2.0.vsix"
+file="/tmp/antigravity-cursor-1.2.1.vsix"
 curl -fL --connect-timeout 15 \
-  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix \
+  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix \
   -o "$file"
 printf '%s  %s\n' \
-  '46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb' \
+  'f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768' \
   "$file" | shasum -a 256 -c -
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
   --install-extension "$file" --force
@@ -194,9 +194,9 @@ Adjust the CLI path if Cursor is installed elsewhere. Grant App Management permi
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.0.vsix'
-Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix' -OutFile $file
-$expected = '46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb'
+$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.1.vsix'
+Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix' -OutFile $file
+$expected = 'f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768'
 if ((Get-FileHash $file -Algorithm SHA256).Hash -ine $expected) {
     throw 'SHA-256 verification failed'
 }
