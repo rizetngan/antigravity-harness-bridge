@@ -1,139 +1,220 @@
+<div align="center">
+
+<img src="media/antigravity.svg" width="92" alt="Antigravity Agent Bridge icon">
+
 # Antigravity Agent Bridge
 
-**Connect Google Antigravity to Cursor and other Agent Harness clients.**
+**Bring your Antigravity models into Cursor's native Agent experience.**
 
-A multi-harness integration project built around Google's official Antigravity CLI and Agent Client Protocol (ACP). Cursor is the first native host adapter; ACP-compatible editors can already connect directly to agy acp.
+Native model picker · Native thinking depth · Conversation continuity · Instant provider switching
 
-[简体中文](README.zh-CN.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Client compatibility](docs/client-compatibility.md)
+[![Release](https://img.shields.io/github/v/release/rizetngan/antigravity-harness-bridge?label=release)](https://github.com/rizetngan/antigravity-harness-bridge/releases/latest) ![Windows](https://img.shields.io/badge/Windows-x64-0078D4) ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-555) ![ACP](https://img.shields.io/badge/Agent%20protocol-ACP-4285F4)
 
-![Target architecture](docs/images/target-harness-architecture.jpg)
+English · [简体中文](README.zh-CN.md)
 
-## What this project is
+[Download](#download) · [Highlights](#highlights) · [Platforms](#platform-support) · [Installation](#installation) · [Agent-assisted installation](#agent-assisted-installation) · [Development](#development--validation)
 
-Antigravity Agent Bridge separates the upstream agent runtime from the client-specific integration:
+</div>
 
-- **Upstream:** the signed-in Antigravity CLI account, launched through the official agy acp interface.
-- **Bridge core (target):** a host-neutral runtime contract for model discovery, sessions, event streaming, context, permissions, and lifecycle.
-- **Client adapters:** native integrations for clients that need more than a direct ACP connection.
+<p align="center">
+<img src="docs/images/macos-native-picker.png" width="67%" alt="Antigravity models and Low thinking depth in Cursor's native model picker">
+<img src="docs/images/macos-management.png" width="25%" alt="Antigravity management panel with connected account and model catalogue">
+<br><sub>V1.2.0 on macOS: actual native picker and management panel.</sub>
+</p>
 
-The goal is not to build a replacement agent or a third-party model proxy. Antigravity remains responsible for its agent execution, tools, authentication, and account model access.
+Antigravity Agent Bridge is built around Google's official Antigravity CLI and Agent Client Protocol (ACP). **Keep the Cursor editor, native conversation, and familiar workflow while using the models available to your signed-in Antigravity account.** No separate chat interface or manual copying between IDEs.
 
-## Current release
+The first production adapter is **Antigravity for Cursor**, validated on Windows and macOS. Other agent harnesses can use direct ACP where supported, or dedicated adapters where deeper integration is needed.
 
-![Current Cursor adapter architecture](docs/images/current-cursor-flow.jpg)
+## Download
 
-**V1.2.0 · Windows x64 + macOS Apple Silicon · tested compatibility baseline: Cursor 3.28.7**
+**V1.2.0 stable** · Windows x64 / macOS Apple Silicon · Verified with Cursor 3.28.7 and Antigravity CLI 1.5.18
 
-- Official Antigravity CLI / ACP integration with live account model discovery.
-- Start Service shows only Antigravity models in Cursor's native picker, named `Model·Antigravity`; Stop Service restores the native Cursor models immediately. Reasoning depth remains a native picker control.
-- Native Cursor conversation continuity, ACP session mapping, and native transcript updates.
-- Native management panel, service lifecycle controls, model refresh, and reconnect.
-- Multiple Cursor windows share one authenticated local gateway.
-- 45 automated tests passed on each platform; lifecycle, real-resource patch/restore, and real Gemini 4 Hydrogen Low native-chat checks passed.
-- Workbench changes are opt-in, version-checked, backed up, hash-verified, and reversible.
+**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.0) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
 
-Cursor does not expose a public API for registering arbitrary third-party providers in its native model picker. The current adapter therefore uses a narrow, version-specific Workbench compatibility layer. It does not replace the Cursor executable or create a Cursor fork.
+SHA-256 for the V1.2.0 VSIX:
 
-## Two connection paths
+```text
+46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb
+```
 
-![ACP direct connection and host adapter paths](docs/images/client-connection-modes.jpg)
+Requires Cursor and the [official Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli), with your own Antigravity account. Initial integration may require normal OS authorization; daily service switching does not require elevation or restart.
 
-### 1. ACP-native clients — connect directly
+## Highlights
 
-When a client supports ACP, the shortest path is to register agy acp as its external agent. Google documents this route for Zed, JetBrains IDEs, Android Studio, Xcode, and VS Code through the community ACP Client extension.
+### Native model and reasoning-depth selection
 
-~~~sh
+Choose models inside Cursor's own picker. Labels such as `Gemini 4 Hydrogen·Antigravity` make the provider explicit; native thinking-depth controls expose only the options supported by the model.
+
+The catalogue is discovered dynamically through ACP. The test account exposed 11 model families and 27 model/effort variants in V1.2.0; actual availability depends on the account and service.
+
+### One switch, two provider modes
+
+<p align="center">
+<img src="docs/images/macos-native-picker.png" width="48%" alt="Antigravity-only models after starting the service">
+<img src="docs/images/macos-cursor-picker.png" width="48%" alt="Native Cursor models restored after stopping the service">
+<br><sub>Left: service started. Right: service stopped. Actual cropped menus.</sub>
+</p>
+
+| Action | Result |
+| --- | --- |
+| Start Service | Show only Antigravity models |
+| Stop Service | Stop ACP and restore Cursor's original model directory |
+| Temporary disconnect | Keep Antigravity mode; do not silently fall back to Cursor-billed models |
+| Restore Cursor | Restore original Workbench resources and remove the integration |
+
+Daily switching does not restart Cursor or delete existing conversations. If a conversation still points to an unavailable model after a provider change, explicitly select an available model before sending another message.
+
+### Real native Agent conversations
+
+<p align="center">
+<img src="docs/images/windows-native-chat.png" width="90%" alt="Real Windows Cursor native chat: Gemini 4 Hydrogen Low returned HYDROGEN_LOW_UI_OK">
+<br><sub>Windows: actual Gemini 4 Hydrogen Low request and response in Cursor.</sub>
+</p>
+
+<p align="center">
+<img src="docs/images/macos-native-chat.png" width="36%" alt="Real macOS Cursor native chat: HYDROGEN_LOW_MAC_UI_OK">
+<br><sub>macOS: independently verified Hydrogen Low conversation.</sub>
+</p>
+
+Cursor owns the visible transcript. The adapter maps ACP sessions, synchronizes visible context, and translates streamed responses, supported tool events and checkpoints into Cursor's native conversation. Tool permissions depend on ACP and the capabilities of the host.
+
+### A native panel with reversible integration
+
+Open Antigravity from Cursor's status bar to start or stop the service, connect the account, refresh the model catalogue, or restore Cursor. Multiple windows share the authenticated loopback gateway. The official `agy acp` process remains responsible for agent execution.
+
+The integration is version-checked, backs up modified Workbench resources and verifies their hashes. It is not a Cursor fork or a generic OpenAI-compatible proxy, and does not extract OAuth credentials.
+
+## Why this approach?
+
+| Approach | Antigravity for Cursor | Separate IDEs | Generic model API | ACP-native host |
+| --- | --- | --- | --- | --- |
+| UI | Native Cursor Agent | Each IDE separately | Client-dependent | Native host Agent |
+| Model/effort picker | Native Cursor controls | Separate controls | Interface-dependent | Host-dependent |
+| Execution | Official Antigravity ACP | Separate agents | Usually model requests | Official ACP |
+| Continuity | Cursor-to-ACP session mapping | Manual workflow switching | Implementation-dependent | Host-dependent |
+| Switching | Start / Stop Service | Change IDE | Change endpoint | Host-dependent |
+
+For a client that already supports ACP, prefer Google's direct `agy acp` connection. The value of the native adapter is integration into the host's workflow, not building another model API.
+
+## Platform support
+
+| Platform / client | Status | Installation |
+| --- | --- | --- |
+| Windows x64 + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; UAC for protected directories |
+| macOS Apple Silicon + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; App Management authorization as needed |
+| Windows ARM64 / Intel Mac / Linux | Not live-tested | Compatibility not established |
+| Zed, JetBrains and other ACP clients | Official direct ACP path | Follow client-specific Google documentation |
+| Other non-ACP agent harnesses | Future adapters | Host-specific validation required |
+
+Cursor integration depends on version-specific Workbench resources. Recheck compatibility when Cursor updates. [Client compatibility matrix](docs/client-compatibility.md)
+
+## Installation
+
+1. Install the official Antigravity CLI, verify `agy --version`, and follow the official sign-in flow.
+2. Download the VSIX. In Cursor's Extensions view, choose **Install from VSIX...**.
+3. Open **Antigravity** from the status bar and select **Enable Native Models**.
+4. Confirm any required system permission, then fully quit and reopen Cursor.
+5. Start Service and select a model and thinking depth in Cursor's native picker. Stop Service to return to native Cursor models.
+
+**Upgrading:** restore the previous Workbench integration first, install the new VSIX, re-enable native models, then fully quit and reopen Cursor. Preserve your existing conversations and settings.
+
+### Terminal installation
+
+The following commands install the verified V1.2.0 release and check its checksum. Cursor and the official Antigravity CLI must already be installed. Initial integration is still confirmed from the management panel.
+
+**macOS**
+
+```bash
 agy --version
-agy acp --help
-~~~
+set -e
+file="/tmp/antigravity-cursor-1.2.0.vsix"
+curl -fL --connect-timeout 15 \
+  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix \
+  -o "$file"
+printf '%s  %s\n' \
+  '46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb' \
+  "$file" | shasum -a 256 -c -
+"/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
+  --install-extension "$file" --force
+```
 
-Example Zed configuration:
+Adjust the CLI path if Cursor is installed elsewhere. Grant App Management permission through normal macOS settings if prompted.
 
-~~~json
-{
-  "agent_servers": {
-    "Antigravity": {
-      "type": "custom",
-      "command": "agy",
-      "args": ["acp"]
-    }
-  }
+**Windows PowerShell**
+
+```powershell
+$ErrorActionPreference = 'Stop'
+agy --version
+$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.0.vsix'
+Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix' -OutFile $file
+$expected = '46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb'
+if ((Get-FileHash $file -Algorithm SHA256).Hash -ine $expected) {
+    throw 'SHA-256 verification failed'
 }
-~~~
+cursor --install-extension $file --force
+```
 
-No custom Bridge adapter is needed for this direct route. The client launches the official ACP server and renders its native agent experience.
+If `cursor` is not on PATH, use Install from VSIX in the editor or run `resources\app\bin\cursor.cmd` from the actual Cursor installation. Custom drives are supported. Cursor does not need to run as administrator permanently.
 
-**Model availability is client-dependent.** Google's current ACP documentation says Gemini models are available in every ACP client, while third-party models are exposed only in a defined set of clients, including JetBrains, Android Studio, Zed, and Xcode. See [Google's ACP editor guide](https://antigravity.google/docs/ide/extensions/acp).
+## Agent-assisted installation
 
-### 2. Non-ACP or deeper native integrations — use an adapter
+Copy this prompt into an agent with access to the local computer, such as ChatGPT Work, Codex or Claude Code:
 
-Some hosts need a native model picker, host-owned conversation, special event mapping, or a connection mechanism that is not ACP. These require a host-specific adapter built on the shared Bridge core.
+```text
+Install the latest stable Antigravity Agent Bridge on this computer:
+https://github.com/rizetngan/antigravity-harness-bridge
 
-Cursor is the first example. Future adapters will be selected only after validating the host's documented extension or agent API. A generic OpenAI-compatible endpoint is not treated as equivalent to a full Agent Harness integration.
+1. Check OS, architecture, Cursor and official Antigravity CLI versions against the tested compatibility range.
+2. Download the latest stable VSIX only from this repository's GitHub Releases and verify its published SHA-256. Stop if the checksum does not match.
+3. Check for an existing Workbench integration. Restore the previous integration before upgrading; preserve conversations and settings. Do not interrupt an active task.
+4. Install the VSIX and open the Antigravity panel. Explain the opt-in Workbench patch and backup before enabling it. Let me confirm any OS authorization; do not bypass security.
+5. Fully quit and reopen Cursor. Let me complete official Antigravity sign-in if needed.
+6. Verify Start Service shows only Antigravity models, Stop Service restores native Cursor models, and a no-tool test message uses an account-available model and effort through ACP.
+7. Report the installed version, checksum, real test result and any manual authorization steps.
+```
 
-## Windows support
+## Recovery & troubleshooting
 
-Windows x64 is the first Windows target. Install the official [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli), and verify \`agy --version\` in PowerShell. The extension detects \`%LOCALAPPDATA%\agy\bin\agy.exe\` and custom Cursor installation locations through the running editor. If the Cursor install directory is protected, enabling the integration requests Windows UAC administrator approval; Cursor itself does not need to run as administrator. The native panel and explicit enable/restore workflow are the same as on macOS.
+| Situation | Action |
+| --- | --- |
+| Models do not appear | Check service/account status, refresh the catalogue, and fully restart Cursor after initial integration |
+| Temporarily return to Cursor models | Stop Service |
+| Model is present but requests fail | Reconnect and verify that ACP still exposes the selected model |
+| Updating Cursor or removing the extension | Restore Cursor first, then fully quit and reopen |
+| Cursor cannot launch | Close it and run the standalone recovery launcher; Node.js 22+ must be on PATH |
 
-Standalone recovery is generated in \`%LOCALAPPDATA%\Antigravity for Cursor\recovery\` as \`Restore Cursor.cmd\`. Close Cursor before running it; Node.js 22+ must be available on PATH. The recovery launcher requests UAC elevation when required. Windows installations requiring administrator privileges are not automatically elevated. Windows x64 native model selection, live ACP requests, start/stop switching and recovery were validated on Cursor 3.28.7.
+Recovery launchers:
 
-## Current Cursor installation
+- Windows: `%LOCALAPPDATA%\Antigravity for Cursor\recovery\<installation-id>\Restore Cursor.cmd`
+- macOS: `~/Library/Application Support/Antigravity for Cursor/recovery/<installation-id>/Restore Cursor.command`
 
-1. Install the VSIX from the [Releases](https://github.com/rizetngan/antigravity-harness-bridge/releases) page.
-2. Open the Antigravity panel in Cursor.
-3. Choose **Enable Native Models** and confirm the Workbench compatibility patch.
-4. Fully quit and reopen Cursor after the initial compatibility installation or upgrade, and sign in through the official Antigravity CLI flow if prompted. On macOS, grant App Management permission to the installing application if prompted.
-5. Start Service and select an Antigravity model in Cursor's native model picker; Stop Service to return to native Cursor models. Routine switching does not require restart or administrator approval.
+Recovery uses the original backed-up resources and recorded hashes. Keep these backups; do not overwrite Workbench with resources from unrelated Cursor versions.
 
-For upgrades from an earlier release, restore the previous Workbench patch before installing the new VSIX. See the [architecture and recovery guide](docs/architecture.md).
+## Architecture & other agent harnesses
 
-## Product roadmap
+<p align="center"><img src="docs/images/current-cursor-flow.jpg" width="96%" alt="Current Cursor adapter and official Antigravity ACP architecture"><br><sub>Current Cursor adapter architecture.</sub></p>
 
-![Project roadmap](docs/images/roadmap.jpg)
+Antigravity owns execution, tools, permissions and account access. Cursor owns the host interaction and visible transcript. The local bridge handles discovery, session mapping, event conversion and service lifecycle.
 
-1. **Keep Cursor stable** — preserve the working V1.2.0 adapter and its deterministic recovery.
-2. **Extract the shared core** — separate Antigravity runtime, model catalogue, sessions, normalized events, permissions, and context contracts from Cursor-specific code.
-3. **Reuse ACP wherever possible** — document and optionally automate direct ACP setup instead of rebuilding integrations that already work.
-4. **Add native adapters selectively** — implement only where a host's public API provides a meaningful capability advantage.
-5. **Publish an adapter contract** — allow new clients to integrate without duplicating upstream process, session, and permission logic.
+<p align="center"><img src="docs/images/client-connection-modes.jpg" width="96%" alt="Direct ACP versus dedicated host adapter"></p>
 
-See [Roadmap](docs/roadmap.md) for milestones and acceptance criteria.
+ACP-native clients can connect directly using the [official Google ACP editor guide](https://antigravity.google/docs/ide/extensions/acp). For non-ACP clients and deeper native integration, a tested host adapter is required. Host-neutral Bridge Core and the Adapter SDK remain roadmap goals, not universal V1.2.0 capabilities.
 
-## Documentation
+[Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Adapter contract](docs/adapter-contract.md) · [Known limitations](docs/known-limitations.md)
 
-| Document | Purpose |
-|---|---|
-| [Architecture](docs/architecture.md) | Current implementation and target multi-harness design |
-| [Roadmap](docs/roadmap.md) | Upgrade phases and completion criteria |
-| [Client compatibility](docs/client-compatibility.md) | Direct ACP clients vs native adapter candidates |
-| [Adapter contract](docs/adapter-contract.md) | The future host-adapter interface |
-| [Known limitations](docs/known-limitations.md) | Verified limitations of the current release |
+## Development & validation
 
-## Development
-
-~~~sh
+```bash
+git clone https://github.com/rizetngan/antigravity-harness-bridge.git
+cd antigravity-harness-bridge
 npm install
 npm run check
-npm run probe:acp
-npm run probe:cursor-context
-npm run probe:gateway
-npm run probe:extension-activation
-npm run install:test-copy
-npm run verify:test-copy
-npm run restore:test-copy
 npm run package:vsix
-~~~
+```
 
-## Security and design boundaries
+V1.2.0 passed 45 automated tests per platform, real-resource patch and exact restoration checks, native provider switching, and live Gemini 4 Hydrogen Low conversations on both platforms. Screenshots are genuine application captures or crops, not mockups; see [image provenance](docs/images/README.md).
 
-- Use the official agy acp interface and Antigravity-managed sign-in.
-- Never extract OAuth credentials or build a third-party subscription proxy.
-- Do not silently fall back to a Cursor-billed or unrelated model.
-- Keep host-specific compatibility code isolated from the shared runtime.
-- Read host conversation history only through supported or explicitly validated interfaces; exclude hidden reasoning and system prompts.
-- Map permissions explicitly. If a host cannot express a required permission decision, fail closed rather than auto-approve.
-- Do not claim universal compatibility: each non-ACP host needs a tested adapter and a documented capability matrix.
+Independently maintained by [rizetngan](https://github.com/rizetngan). Antigravity and Cursor are their respective products; this project is not an official product of either.
 
-## Naming
-
-The GitHub repository is antigravity-harness-bridge. The product is **Antigravity Agent Bridge**. The existing VSIX remains the **Antigravity for Cursor** adapter so its installed extension identity stays compatible.
+[Issues](https://github.com/rizetngan/antigravity-harness-bridge/issues)

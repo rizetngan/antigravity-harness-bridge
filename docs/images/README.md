@@ -8,3 +8,18 @@ These diagrams are hand-authored SVG source files and compressed JPEG previews s
 - roadmap.svg — staged evolution plan.
 
 The target diagrams describe planned architecture, not shipped functionality.
+
+
+## V1.2.0 实机截图 / Live screenshots
+
+The following screenshots were captured from the actual Cursor 3.28.7 UI running the released V1.2.0 adapter, with Antigravity CLI 1.5.18. They are unmodified window captures or viewport crops of the test workspace. No simulated responses, account identifiers, tokens or personal conversations are included.
+
+| File | Source / content |
+| --- | --- |
+| `macos-native-picker.png` | macOS Apple Silicon, service running; native picker and Low thinking-depth menu. Visible portion of the scrollable model list. |
+| `macos-cursor-picker.png` | Same macOS window after explicit Stop Service; native Cursor catalogue restored. Existing conversation may still display its unavailable previous model until reselected. |
+| `macos-management.png` | Actual management panel showing connected service, 11 families and 27 variants at capture time. |
+| `macos-native-chat.png` | Original macOS live test conversation; assistant returned `HYDROGEN_LOW_MAC_UI_OK`. |
+| `windows-native-chat.png` | Original Windows x64 Cursor window; assistant returned `HYDROGEN_LOW_UI_OK`. |
+
+Actual model availability and appearance may change with the account, Cursor version and theme. The management panel uses its current Chinese UI labels.
