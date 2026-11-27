@@ -27,14 +27,17 @@ try{
  const model=models.find(m=>/flash/i.test(m.id))??models[0];
  assert.ok(model,"No model offered by the current account");
  console.log("Official ACP catalogue available:",models.length,"families; selected:",model.id);
+ const histories=new Map();
  async function run(conversationId,execution,text){
-  const body={execution,history:{source:"native-turns",totalTurns:0,entries:[]},first:{runRequest:{conversationId,requestedModel:{modelId:"antigravity/"+model.id},action:{userMessageAction:{userMessage:{text,messageId:randomUUID(),mode:1}}},conversationState:{mode:1,turns:[]}}}};
+  const entries=histories.get(conversationId)??[];
+  const body={execution,history:{source:"native-turns",totalTurns:entries.length/2,entries},first:{runRequest:{conversationId,requestedModel:{modelId:"antigravity/"+model.id},action:{userMessageAction:{userMessage:{text,messageId:randomUUID(),mode:1}}},conversationState:{mode:1,turns:[]}}}};
   const response=await fetch(config.url+"/sessions/"+randomUUID()+"/start",{method:"POST",headers:{Authorization:"Bearer "+config.token,"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(90_000)});
   const events=(await response.text()).trim().split("\n").map(JSON.parse);
   assert.equal(response.status,200,events.find(e=>e.error)?.error);
   assert.ok(events.some(e=>e.done),events.find(e=>e.error)?.error||"No completion");
   const reply=events.filter(e=>e.checkpoint).flatMap(e=>e.checkpoint.steps).map(s=>s.assistantMessage?.text||"").join("");
   const record=await gateway.sessions.get(conversationId);
+  histories.set(conversationId,[...entries,{role:"user",text},{role:"assistant",text:reply}]);
   return {reply,record};
  }
  const text="Read the file sentinel.txt in your current working directory. Reply with its exact contents only. Do not modify any files.";
@@ -42,6 +45,21 @@ try{
  for(let i=0;i<2;i++){assert.equal(results[i].reply.trim(),expected[i]);assert.equal(results[i].record.cwd,[a,b][i]);}
  assert.notEqual(results[0].record.sessionId,results[1].record.sessionId);
  console.log("PASS: real official ACP, two concurrent local projects read their own unique sentinel.");
+ const wt=path.join(temp,"Actual Worktree");
+ const git=(args)=>execFileSync("git",["-C",a,...args],{windowsHide:true});
+ git(["add","sentinel.txt"]);git(["-c","user.name=Probe","-c","user.email=probe@example.invalid","commit","-qm","synthetic fixture"]);
+ git(["worktree","add","-qb","probe-worktree",wt]);
+ const realWt=await realpath(wt);await writeFile(path.join(realWt,"sentinel.txt"),"ACTUAL_WORKTREE_OK");
+ const again=await run("a",{kind:"local",workspacePaths:[a]},"Read sentinel.txt again, and reply with its exact contents only. Do not modify files.");
+ assert.equal(again.reply.trim(),expected[0]);assert.equal(again.record.sessionId,results[0].record.sessionId);
+ console.log("PASS: real ACP resumes existing native conversation at the same scope.");
+ const switched=await run("a",{kind:"local",workspacePaths:[realWt],worktreeMainPath:a},text);
+ assert.equal(switched.reply.trim(),"ACTUAL_WORKTREE_OK");assert.equal(switched.record.cwd,realWt);assert.notEqual(switched.record.sessionId,again.record.sessionId);
+ console.log("PASS: real Git worktree selected and new ACP session bound to it.");
+ const multi=await run("multi",{kind:"local",workspacePaths:[b,a]},"Read sentinel.txt from your current working directory and then read the file at "+JSON.stringify(path.join(a,"sentinel.txt"))+". Reply with both exact contents in that order separated by a single space. Do not modify files.");
+ assert.equal(multi.reply.trim(),expected[1]+" "+expected[0]);assert.equal(multi.record.cwd,b);
+ console.log("PASS: real ACP can read both native roots (second root addressed explicitly).");
+
  const ordinary=path.join(temp,"Ordinary Folder");await mkdir(ordinary);await writeFile(path.join(ordinary,"sentinel.txt"),"ORDINARY_FOLDER_OK");
  const plain=await run("ordinary",{kind:"local",workspacePaths:[ordinary]},text);
  assert.equal(plain.reply.trim(),"ORDINARY_FOLDER_OK");
