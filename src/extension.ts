@@ -444,6 +444,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const patchState = await readPatchState(paths.service);
       patch = patchState;
       output.appendLine("Workbench integration: " + patchState);
+      output.appendLine("Native picker: controlled by Cursor. ACP connection and patch presence do not establish native model selection or a completed native turn.");
       output.appendLine("App root: " + paths.appRoot);
       output.appendLine("Official CLI: " + cli.status + (cli.version ? " · " + cli.version : "") + (cli.detail ? " · " + cli.detail : ""));
       try {
