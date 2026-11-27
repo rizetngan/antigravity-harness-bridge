@@ -1,4 +1,4 @@
-import { homedir } from "node:os";
+import { platformPaths } from "../platform.ts";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -50,7 +50,7 @@ export class CursorConversationReader {
 
   constructor(databasePath?: string) {
     const userDataDirectory = process.env.ANTIGRAVITY_CURSOR_USER_DATA_DIR ??
-      join(homedir(), "Library", "Application Support", "Cursor");
+      platformPaths().cursorUserData;
     this.databasePath = databasePath ?? join(
       userDataDirectory,
       "User",

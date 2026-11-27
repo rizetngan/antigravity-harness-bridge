@@ -41,6 +41,7 @@ export class TerminalHandler {
       cwd,
       env,
       shell: false,
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const terminalId = randomUUID();

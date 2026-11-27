@@ -129,7 +129,7 @@ test("updates every declared Workbench checksum without touching source files", 
 test("installs and restores the Workbench patch from a hash-verified backup", async () => {
   const directory = mkdtempSync(join(tmpdir(), "antigravity-compat-restore-"));
   try {
-    const appBundle = join(directory, "Cursor.app");
+    const appBundle = join(directory, "Cursor-Antigravity-Test");
     const appRoot = join(appBundle, "Contents", "Resources", "app");
     const workbench = join(appRoot, "out", "vs", "workbench");
     const desktopPath = join(workbench, "workbench.desktop.main.js");

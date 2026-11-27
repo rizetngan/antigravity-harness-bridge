@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
+import { isCursorResources, platformPaths } from "../platform.ts";
 import path from "node:path";
 import { AntigravityAcpProcess, type AntigravityCatalogue } from "../acp/AntigravityAcpProcess.js";
 import { AcpClientHandlers } from "../acp/AcpClientHandlers.js";
@@ -117,7 +118,7 @@ export class AntigravityGateway {
   constructor(output: vscode.OutputChannel, profileStorage?: string, appRoot?: string, onRemoteStop?: () => Promise<void>) {
     this.onRemoteStop = onRemoteStop;
     this.output = output;
-    const location = gatewayLocation(path.join(homedir(), "Library", "Application Support", "Antigravity for Cursor"), appRoot);
+    const location = gatewayLocation(platformPaths().support, appRoot);
     this.storageDirectory = location.directory;
     this.port = location.port;
     this.reader = new CursorConversationReader(profileStorage ? path.join(path.dirname(profileStorage), "state.vscdb") : path.join(location.directory, "state.vscdb"));
@@ -895,7 +896,7 @@ function defaultWorkspaceDirectory(): string {
   const candidates = [process.env.INIT_CWD, process.cwd()];
   for (const candidate of candidates) {
     if (candidate && path.isAbsolute(candidate) &&
-        !candidate.includes(".app/Contents/Resources/app")) {
+        !isCursorResources(candidate)) {
       return candidate;
     }
   }

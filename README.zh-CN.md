@@ -131,3 +131,12 @@ npm run package:vsix
 ## 命名
 
 GitHub 仓库名为 antigravity-harness-bridge，产品名为 **Antigravity Agent Bridge**。现有 VSIX 继续作为 **Antigravity for Cursor** 适配器，避免改变已安装插件的身份。
+
+
+## Windows 支持（1.2.0 候选版）
+
+- 首先支持 Windows x64，使用 Google 官方 [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli)，在 PowerShell 中确认 \`agy --version\`。
+- 插件会自动识别官方 CLI 的默认安装位置、Cursor 实际安装目录和用户数据目录。支持自定义盘符安装；如果安装目录受 Windows 管理员权限保护，启用时会弹出 UAC 管理员授权；无需长期以管理员身份运行 Cursor。
+- 安装 VSIX 后，使用原有管理面板启用原生模型、登录、刷新模型、启停服务或恢复 Cursor。
+- 独立恢复工具位于 \`%LOCALAPPDATA%\Antigravity for Cursor\recovery\` 下的 \`Restore Cursor.cmd\`，先退出 Cursor，确保 Node.js 22+ 在 PATH 中，再运行工具；恢复时会自动请求 UAC 管理员授权。
+- 不自动提权修改系统级安装；Windows 真实账户和原生界面仍需完成验收。

@@ -1,5 +1,14 @@
 # Changelog
 
+
+## 1.2.0 — Windows candidate
+
+- Add Windows-native agy.exe discovery and PowerShell login.
+- Separate local bridge data from Cursor roaming data, preserving macOS paths.
+- Support Windows custom-drive Cursor installs and an independent recovery launcher.
+- Add Windows real-resource copy patch/restore probe and cross-platform tests.
+- Keep v1.1.2 main/release untouched until Windows end-to-end acceptance.
+
 ## 1.1.2 — 2026-11-27
 
 ### Added

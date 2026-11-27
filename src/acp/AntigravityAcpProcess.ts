@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
+import { resolveAgyExecutable } from "../platform.ts";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import {
   client,
@@ -77,6 +76,7 @@ export class AntigravityAcpProcess {
       cwd: homedir(),
       stdio: ["pipe", "pipe", "pipe"],
       env: process.env,
+      windowsHide: true,
     });
     this.child = child;
     child.stderr.setEncoding("utf8");
@@ -241,8 +241,6 @@ export class AntigravityAcpProcess {
   }
 
   private resolveExecutable(): string {
-    if (process.env.AGY_PATH) return process.env.AGY_PATH;
-    const local = join(homedir(), ".local", "bin", "agy");
-    return existsSync(local) ? local : "agy";
+    return resolveAgyExecutable();
   }
 }

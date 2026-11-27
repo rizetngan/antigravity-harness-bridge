@@ -71,6 +71,12 @@ Some hosts need a native model picker, host-owned conversation, special event ma
 
 Cursor is the first example. Future adapters will be selected only after validating the host's documented extension or agent API. A generic OpenAI-compatible endpoint is not treated as equivalent to a full Agent Harness integration.
 
+## Windows support (1.2.0 candidate)
+
+Windows x64 is the first Windows target. Install the official [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli), and verify \`agy --version\` in PowerShell. The extension detects \`%LOCALAPPDATA%\agy\bin\agy.exe\` and custom Cursor installation locations through the running editor. If the Cursor install directory is protected, enabling the integration requests Windows UAC administrator approval; Cursor itself does not need to run as administrator. The native panel and explicit enable/restore workflow are the same as on macOS.
+
+Standalone recovery is generated in \`%LOCALAPPDATA%\Antigravity for Cursor\recovery\` as \`Restore Cursor.cmd\`. Close Cursor before running it; Node.js 22+ must be available on PATH. The recovery launcher requests UAC elevation when required. Windows installations requiring administrator privileges are not automatically elevated. Live account/model and native UI validation are required before declaring full Windows support.
+
 ## Current Cursor installation
 
 1. Install the VSIX from the [Releases](https://github.com/rizetngan/antigravity-harness-bridge/releases) page.

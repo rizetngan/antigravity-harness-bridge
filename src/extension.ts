@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import { createHash } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
-import { constants, promises as fs } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
+import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, probeDirectoryWritable, powershellQuote } from "./platform.ts";
 import path from "node:path";
 import { AntigravityGateway } from "./gateway/AntigravityGateway.js";
 import { CursorCompatibility } from "./cursor/compat.js";
@@ -14,7 +15,7 @@ let loginTerminal: vscode.Terminal | undefined;
 function createCompatibility(context: vscode.ExtensionContext, allowOriginalApp = false) {
   const appRoot = path.resolve(vscode.env.appRoot);
   const appKey = createHash("sha256").update(appRoot).digest("hex").slice(0, 16);
-  const supportPath = path.join(homedir(), "Library", "Application Support", "Antigravity for Cursor");
+  const supportPath = platformPaths().support;
   const testRoot = path.join(homedir(), "Applications", "Cursor-Antigravity-Test.app", "Contents", "Resources", "app");
   const storagePath = appRoot === testRoot
     ? path.join(supportPath, "compatibility-test")
@@ -70,23 +71,15 @@ async function openAgyLoginTerminal(
     return;
   }
 
-  let executable = path.join(homedir(), ".local", "bin", "agy");
-  try {
-    await fs.access(executable, constants.X_OK);
-  } catch {
-    try {
-      executable = execFileSync("/bin/zsh", ["-lc", "command -v agy"], { encoding: "utf8" }).trim();
-    } catch {
-      executable = "";
-    }
-  }
-  if (!executable) throw new Error("未找到 Antigravity CLI（agy），请先安装 Antigravity CLI。");
-
+  const executable = resolveAgyExecutable();
+  const windows = process.platform === "win32";
+  const probe = spawnSync(executable, ["--version"], { encoding: "utf8", windowsHide: true });
+  if (probe.error || probe.status !== 0) throw new Error("未找到可用的 Antigravity CLI（agy），请先安装官方 CLI。");
   const terminal = vscode.window.createTerminal({
     name: "Antigravity Sign In",
     cwd: homedir(),
-    shellPath: "/bin/zsh",
-    shellArgs: ["-l"],
+    shellPath: windows ? "powershell.exe" : "/bin/zsh",
+    shellArgs: windows ? ["-NoLogo", "-NoProfile"] : ["-l"],
   });
   loginTerminal = terminal;
 
@@ -107,7 +100,7 @@ async function openAgyLoginTerminal(
   context.subscriptions.push(closeListener);
 
   terminal.show(true);
-  terminal.sendText(shellQuote(executable) + " acp --login");
+  terminal.sendText((windows ? "& " + powershellQuote(executable) : shellQuote(executable)) + " acp --login");
   void vscode.window.showInformationMessage(
     "请按终端提示完成 Google 账号登录。登录命令退出后关闭终端标签，插件会自动刷新模型目录。",
   );
@@ -118,28 +111,104 @@ function appleScriptQuote(value: string): string {
 }
 
 async function canWriteDirectory(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(path.dirname(filePath), constants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
+  // fs.access(W_OK) can report success on Windows even when the directory's
+  // DACL only grants read access. Probe the operation we actually need instead.
+  return probeDirectoryWritable(path.dirname(filePath));
 }
 
-function runPrivilegedCompatibility(
+async function runWindowsElevatedCompatibility(
   context: vscode.ExtensionContext,
   action: "install" | "restore",
   paths: ReturnType<typeof createCompatibility>,
-): void {
+): Promise<void> {
+  const nodePath = resolveNodeExecutable();
+  const helperPath = context.asAbsolutePath(path.join("dist", "installer.cjs"));
+  const rendererPath = context.asAbsolutePath(path.join("dist", "renderer.js"));
+  const supportPath = platformPaths().support;
+  await fs.mkdir(paths.recoveryPath, { recursive: true });
+
+  const logPath = path.join(paths.recoveryPath, "elevated-" + action + "-" + Date.now() + ".log");
+  const installerArgs = [
+    helperPath,
+    action,
+    paths.appRoot,
+    paths.storagePath,
+    rendererPath,
+    supportPath,
+    "-1",
+    "-1",
+  ];
+  const elevatedScript = [
+    "$ErrorActionPreference = 'Stop'",
+    "$nodePath = " + powershellQuote(nodePath),
+    "$installerArgs = @(" + installerArgs.map(powershellQuote).join(", ") + ")",
+    "& $nodePath @installerArgs *> " + powershellQuote(logPath),
+    "exit $LASTEXITCODE",
+  ].join("\r\n");
+  const encoded = Buffer.from(elevatedScript, "utf16le").toString("base64");
+  const powershellPath = path.join(
+    process.env.SystemRoot || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+  const parentScript = [
+    "$ErrorActionPreference = 'Stop'",
+    "try {",
+    "  $process = Start-Process -FilePath " + powershellQuote(powershellPath) +
+      " -Verb RunAs -Wait -PassThru -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand'," +
+      powershellQuote(encoded) + ")",
+    "  if (Test-Path " + powershellQuote(logPath) + ") { Get-Content -Raw " + powershellQuote(logPath) + " }",
+    "  exit $process.ExitCode",
+    "} catch {",
+    "  [Console]::Error.WriteLine($_.Exception.Message)",
+    "  if ($_.Exception.Message -match 'cancel|cancelled|1223') { exit 1223 }",
+    "  exit 1",
+    "}",
+  ].join("\r\n");
+
+  const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+    const child = spawn(powershellPath, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", parentScript], {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ code, stdout, stderr }));
+  });
+
+  if (result.code === 0) return;
+  if (result.code === 1223 || /user canceled|operation was canceled|cancelled by the user/i.test(result.stderr)) {
+    throw new Error("已取消 Windows 管理员授权，Cursor 原文件未修改。");
+  }
+  throw new Error(
+    "Windows 管理员安装助手执行失败（退出码 " + String(result.code) + "）。" +
+    (result.stderr || result.stdout ? "\n" + (result.stderr + "\n" + result.stdout).trim() : ""),
+  );
+}
+
+async function runPrivilegedCompatibility(
+  context: vscode.ExtensionContext,
+  action: "install" | "restore",
+  paths: ReturnType<typeof createCompatibility>,
+): Promise<void> {
+  if (process.platform === "win32") {
+    await runWindowsElevatedCompatibility(context, action, paths);
+    return;
+  }
   if (process.platform !== "darwin") {
-    throw new Error("管理员授权安装目前只支持 macOS。");
+    throw new Error("当前系统不支持对 Cursor 安装目录进行管理员授权修改。");
   }
   const nodePath = execFileSync("/bin/zsh", ["-lc", "command -v node"], { encoding: "utf8" }).trim();
   if (!nodePath) throw new Error("没有找到 Node.js，无法启动安全安装助手。");
 
   const helperPath = context.asAbsolutePath(path.join("dist", "installer.cjs"));
   const rendererPath = context.asAbsolutePath(path.join("dist", "renderer.js"));
-  const supportPath = path.join(homedir(), "Library", "Application Support", "Antigravity for Cursor");
+  const supportPath = platformPaths().support;
   const uid = typeof process.getuid === "function" ? process.getuid() : -1;
   const gid = typeof process.getgid === "function" ? process.getgid() : -1;
   const args = [
@@ -166,13 +235,45 @@ async function installRecoveryTool(
   context: vscode.ExtensionContext,
   paths: ReturnType<typeof createCompatibility>,
 ): Promise<string> {
-  const supportPath = path.join(homedir(), "Library", "Application Support", "Antigravity for Cursor");
+  const supportPath = platformPaths().support;
   await fs.mkdir(paths.recoveryPath, { recursive: true });
   const helperPath = path.join(paths.recoveryPath, "installer.cjs");
   const rendererPath = path.join(paths.recoveryPath, "renderer.js");
   const commandPath = path.join(paths.recoveryPath, "Restore Cursor.command");
   await fs.copyFile(context.asAbsolutePath(path.join("dist", "installer.cjs")), helperPath);
   await fs.copyFile(context.asAbsolutePath(path.join("dist", "renderer.js")), rendererPath);
+
+  if (process.platform === "win32") {
+    const args = ["restore", paths.appRoot, paths.storagePath, rendererPath, supportPath, "-1", "-1"];
+    const wrapper = path.join(paths.recoveryPath, "restore.cjs");
+    await fs.writeFile(
+      wrapper,
+      'process.argv = [process.execPath, require("node:path").join(__dirname, "installer.cjs"), ...' +
+        JSON.stringify(args) + ']; require("./installer.cjs");\r\n',
+    );
+    const elevatedScript = path.join(paths.recoveryPath, "restore-elevated.ps1");
+    await fs.writeFile(elevatedScript, [
+      "$ErrorActionPreference = 'Stop'",
+      "$nodePath = (Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source",
+      "$restorePath = Join-Path $PSScriptRoot 'restore.cjs'",
+      "$argumentLine = '\"' + $restorePath + '\"'",
+      "$process = Start-Process -FilePath $nodePath -ArgumentList $argumentLine -Verb RunAs -Wait -PassThru",
+      "if ($process.ExitCode -ne 0) { throw \"Restore failed with exit code $($process.ExitCode).\" }",
+      "Write-Host 'Cursor Workbench restored. Restart Cursor.'",
+      "",
+    ].join("\r\n"));
+    const launcher = path.join(paths.recoveryPath, "Restore Cursor.cmd");
+    await fs.writeFile(launcher, [
+      "@echo off",
+      "setlocal DisableDelayedExpansion",
+      'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0restore-elevated.ps1"',
+      "if errorlevel 1 (echo Restore failed. Close Cursor and check permissions. & pause & exit /b 1)",
+      "echo Cursor restored. Restart Cursor.",
+      "pause",
+      "",
+    ].join("\r\n"));
+    return launcher;
+  }
 
   const uid = typeof process.getuid === "function" ? process.getuid() : -1;
   const gid = typeof process.getgid === "function" ? process.getgid() : -1;
@@ -212,7 +313,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   activeGateway = gateway;
   let patch: PatchState = "checking";
   let reload = false;
-  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, version: "1.1.2" }), context.asAbsolutePath("media/management.html"));
+  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, version: "1.2.0" }), context.asAbsolutePath("media/management.html"));
   context.subscriptions.push(panel, vscode.window.registerWebviewViewProvider(VIEW_ID, panel, { webviewOptions: { retainContextWhenHidden: false } }));
   // Cursor can hide the Activity Bar in its Agent-oriented layout. The native
   // status item provides the same one-click entry without changing that layout.
@@ -343,8 +444,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await paths.service.install(plan);
         output.appendLine("Workbench compatibility installed with the current user account.");
       } else {
-        runPrivilegedCompatibility(context, "install", paths);
-        output.appendLine("Workbench compatibility installed with macOS administrator authorization.");
+        await runPrivilegedCompatibility(context, "install", paths);
+        output.appendLine("Workbench compatibility installed with administrator authorization.");
       }
       if (await readPatchState(paths.service) !== "enabled") {
         throw new Error("补丁写入后未通过完整性复验。");
@@ -354,6 +455,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       patch = "enabled"; reload = true; panel.publish();
       await offerReload("Antigravity 原生模型接入已启用。重载窗口后即可加载模型目录。");
     } catch (error) {
+      try {
+        const currentState = await readPatchState(createCompatibility(context, true).service);
+        if (currentState !== "enabled") await gateway.stop();
+      } catch {
+        await gateway.stop().catch(() => undefined);
+      }
       const message = error instanceof Error ? error.message : String(error);
       output.appendLine("Enabling Antigravity integration failed: " + message);
       output.show(true);
@@ -404,7 +511,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (writable) {
         await paths.service.restore();
       } else {
-        runPrivilegedCompatibility(context, "restore", paths);
+        await runPrivilegedCompatibility(context, "restore", paths);
       }
       if (await readPatchState(paths.service) !== "disabled") {
         throw new Error("恢复后 Workbench 仍检测到 Antigravity 补丁。");

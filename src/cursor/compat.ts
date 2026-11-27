@@ -287,7 +287,7 @@ export class CursorCompatibility {
 
   async install(plan: CompatibilityPlan): Promise<void> {
     if (this.isDailyCursorApp() && !this.options.allowOriginalApp) {
-      throw new Error("Refusing to patch the daily Cursor.app. Use a copied Cursor-Antigravity-Test.app first.");
+      throw new Error("Refusing to patch the daily Cursor installation. Use an isolated Cursor test copy first.");
     }
     for (const target of plan.targets) {
       if (digest(await fs.readFile(target.path)) !== target.originalHash) {
@@ -396,6 +396,11 @@ export class CursorCompatibility {
   }
 
   private isDailyCursorApp(): boolean {
+    if (process.platform === "win32") {
+      // Require explicit consent for every real Windows resources/app install, including custom drives.
+      return /[\\/]resources[\\/]app$/i.test(this.appRoot) &&
+        !/[\\/]Cursor-Antigravity-Test[\\/]/i.test(this.appRoot);
+    }
     return this.appRoot === path.resolve("/Applications/Cursor.app/Contents/Resources/app");
   }
 }
