@@ -9,10 +9,30 @@ export const EXTENSION_ID = "rizetngan.antigravity-cursor";
 const MODEL_GETTER = "getAvailableDefaultModels(){return[...this._availableDefaultModels()]}";
 const BRIDGE_GETTER = "getAvailableDefaultModels(){/* ANTIGRAVITY_MODEL_GETTER */return globalThis.__antigravityBridge?globalThis.__antigravityBridge.mergeModels(this,[...this._availableDefaultModels()]):[...this._availableDefaultModels()]}";
 const AGENT_HOST_ASSIGN = /this\._agentHostEnabled=[^,;]{1,200},/;
-const MODEL_AVAILABILITY_GUARD = 'const f=d.split(",").map(v=>v.trim()).filter(v=>v.length>0),p=f.map(v=>JXm(v,n,s));if(!(p.length>0&&p.every(v=>n.includes(v)))';
-const MODEL_AVAILABILITY_SEAM = 'if(f.length>0&&f.every(v=>globalThis.__antigravityBridge?.registeredModel?.(v,l)))return u;';
-const DESKTOP_MODEL_AVAILABILITY_GUARD = 'const f=d.split(",").map(_=>_.trim()).filter(_=>_.length>0),g=f.map(_=>Cdp(_,i,s));if(!(g.length>0&&g.every(_=>i.includes(_)))';
-const DESKTOP_MODEL_AVAILABILITY_SEAM = 'if(f.length>0&&f.every(_=>globalThis.__antigravityBridge?.registeredModel?.(_,l)))return u;';
+// Locate the native fixUnavailable branch by its structural relations and stable
+// properties, never by minified variable names. Require the enclosing stored
+// config, the blocked-model predicate and the diagnostic marker to agree.
+const MODEL_AVAILABILITY = /if\((?<model>[\w$]+)==="default"\)return (?<stored>[\w$]+);const (?<list>[\w$]+)=\k<model>\.split\(","\)\.map\((?<item>[\w$]+)=>\k<item>\.trim\(\)\)\.filter\((?<filter>[\w$]+)=>\k<filter>\.length>0\),(?<resolved>[\w$]+)=\k<list>\.map\((?<resolveItem>[\w$]+)=>[\w$]+\(\k<resolveItem>,(?<available>[\w$]+),[\w$]+\)\);(?<seam>if\(\k<list>\.length>0&&\k<list>\.every\((?<registeredItem>[\w$]+)=>globalThis\.__antigravityBridge\?\.registeredModel\?\.\(\k<registeredItem>,(?<registeredBlocked>[\w$]+)\)\)\)return \k<stored>;)?(?<guard>if\(!\(\k<resolved>\.length>0&&\k<resolved>\.every\((?<everyItem>[\w$]+)=>\k<available>\.includes\(\k<everyItem>\)\)\)\))\{if\(\k<available>\.length===0\|\|(?<field>[\w$]+)==="background-composer"\)return \k<stored>;/g;
+const CONFIG_CONTEXT = /const\{([^{}]{1,900})\}=([\w$]+),([\w$]+)=([\w$]+)\.getStoredModelConfig\(([\w$]+)\);/g;
+
+function availabilityMatches(source: string) {
+  const result: Array<{ start: number; insert: number; list: string; stored: string; blocked: string; item: string; patched: boolean }> = [];
+  for (const m of source.matchAll(MODEL_AVAILABILITY)) {
+    const g = m.groups!;
+    const at = m.index!;
+    const prefix = source.slice(Math.max(0, at - 1800), at);
+    const contexts = [...prefix.matchAll(CONFIG_CONTEXT)].filter(c => c[3] === g.stored && c[5] === g.field);
+    if (!contexts.length) continue;
+    const c = contexts.at(-1)!, fields = c[1];
+    const get = (name: string) => new RegExp("(?:^|,)" + name + ":([\\w$]+)(?=[=,]|$)").exec(fields)?.[1];
+    const blocked = get("isModelBlocked");
+    if (!blocked || get("availableModels") !== g.available || get("specificModelField") !== g.field || get("modelConfigService") !== c[4]) continue;
+    if (g.seam && g.registeredBlocked !== blocked) continue;
+    if (!source.slice(at + m[0].length, at + m[0].length + 2600).includes('subkey:"fix_unavailable_model_reset"')) continue;
+    result.push({ start: at, insert: at + m[0].indexOf(g.guard), list: g.list, stored: g.stored, blocked, item: g.item, patched: Boolean(g.seam) });
+  }
+  return result;
+}
 const GLASS_BASE_LIST = /([\w$]+)=\["anysphere\.cursor-resolver","anysphere\.cursor-always-local",/g;
 const GLASS_SEAM_MARK = "/* ANTIGRAVITY_GLASS_EXTENSION */";
 const GLASS_SEAM_TEXT = GLASS_SEAM_MARK + JSON.stringify(EXTENSION_ID) + ",";
@@ -41,6 +61,8 @@ const TARGET_SPECS = [
 
 export interface CompatibilityOptions {
   allowOriginalApp?: boolean;
+  // Pure synthetic test fixtures do not contain the entire native UI.
+  syntheticFixture?: boolean;
 }
 
 export interface CompatibilityAnchor {
@@ -88,16 +110,15 @@ export function anchorCounts(source: string): { adapter: boolean; ok: boolean; a
   const getterCount = body.split(MODEL_GETTER).length - 1;
   const bridgeGetterCount = body.split(BRIDGE_GETTER).length - 1;
   const glassSeams = body.split(GLASS_SEAM_TEXT).length - 1;
-  const modelAvailabilityGuards = body.split(MODEL_AVAILABILITY_GUARD).length - 1;
-  const modelAvailabilitySeams = body.split(MODEL_AVAILABILITY_SEAM).length - 1;
-  const desktopModelAvailabilityGuards = body.split(DESKTOP_MODEL_AVAILABILITY_GUARD).length - 1;
-  const desktopModelAvailabilitySeams = body.split(DESKTOP_MODEL_AVAILABILITY_SEAM).length - 1;
+  const availability = availabilityMatches(body);
+  const modelAvailabilityGuards = availability.filter(match => !match.patched).length;
+  const modelAvailabilitySeams = availability.filter(match => match.patched).length;
   const anchors: CompatibilityAnchor[] = [
     { id: "promise_client", count: body.split('"promise-client.js"').length - 1, patched: 0, required: true, ok: false },
     { id: "client_factory", count: factories, patched: wrappedFactories, required: true, ok: false },
     { id: "model_getter", count: getterCount, patched: bridgeGetterCount, required: true, ok: false },
     { id: "turn_strategy", count: [...body.matchAll(STRATEGY)].length, patched: [...body.matchAll(STRATEGY_PATCH)].length, required: false, ok: false },
-    ...NATIVE_TYPES.map((type) => {
+    ...([...NATIVE_TYPES, ...((body.match(STRATEGY)?.length || body.match(STRATEGY_PATCH)?.length) ? ["AgentServerMessage"] : [])]).map((type) => {
       const pattern = new RegExp('([\\w$]+)=([\\w$]+)\\.makeMessageType\\("agent\\.v1\\.' + type + '"', "g");
       return { id: "type_" + type, count: [...body.matchAll(pattern)].length, patched: 0, required: true, ok: false };
     }),
@@ -115,7 +136,6 @@ export function anchorCounts(source: string): { adapter: boolean; ok: boolean; a
       required: false,
       ok: false,
     },
-    { id: "model_availability_desktop", count: desktopModelAvailabilityGuards, patched: desktopModelAvailabilitySeams, required: false, ok: false },
     {
       id: "glass_list",
       count: [...body.matchAll(new RegExp(GLASS_BASE_LIST.source, "g"))].length,
@@ -138,6 +158,27 @@ export function anchorCounts(source: string): { adapter: boolean; ok: boolean; a
     anchor.ok = anchor.required ? total === 1 : total <= 1;
   }
   return { adapter: endAt >= 0, ok: anchors.every((anchor) => anchor.ok), anchors };
+}
+
+// A plan can only be considered native-provider compatible when every seam
+// required for the advertised picker/Agent behavior is uniquely present.
+const FULL_NATIVE_ANCHORS = new Set(["turn_strategy", "type_AgentServerMessage", "model_availability", "glass_list", "provider_picker", "provider_legacy", "provider_settings", "provider_props"]);
+
+export function nativeCompatibility(source: string): ReturnType<typeof anchorCounts> {
+  const result = anchorCounts(source);
+  for (const id of FULL_NATIVE_ANCHORS) {
+    if (!result.anchors.some(a => a.id === id)) result.anchors.push({ id, count: 0, patched: 0, required: true, ok: false });
+  }
+  for (const a of result.anchors) {
+    if (FULL_NATIVE_ANCHORS.has(a.id)) {
+      a.required = true;
+      a.ok = a.count + a.patched === 1;
+    }
+    if (result.adapter && (FULL_NATIVE_ANCHORS.has(a.id) || a.id === "model_getter" || a.id === "client_factory") && !a.id.startsWith("type_")) {
+      a.ok = a.ok && a.patched === 1 && a.count === 0;
+    }
+  }
+  return { ...result, ok: result.anchors.every(a => a.ok) };
 }
 
 export function patchSource(
@@ -184,22 +225,13 @@ export function patchSource(
   const assignments = [...body.matchAll(new RegExp(AGENT_HOST_ASSIGN.source, "g"))];
   if (assignments.length > 1) throw new Error("Cursor Agent Host switch is ambiguous.");
 
-  const modelAvailabilityCount = body.split(MODEL_AVAILABILITY_GUARD).length - 1;
-  if (modelAvailabilityCount > 1) throw new Error("Cursor model availability guard is ambiguous.");
-  if (modelAvailabilityCount === 1) {
-    body = body.replace(
-      MODEL_AVAILABILITY_GUARD,
-      MODEL_AVAILABILITY_GUARD.replace(";if(!(", ";" + MODEL_AVAILABILITY_SEAM + "if(!("),
-    );
-  }
-
-  const desktopModelAvailabilityCount = body.split(DESKTOP_MODEL_AVAILABILITY_GUARD).length - 1;
-  if (desktopModelAvailabilityCount > 1) throw new Error("Cursor desktop model availability guard is ambiguous.");
-  if (desktopModelAvailabilityCount === 1) {
-    body = body.replace(
-      DESKTOP_MODEL_AVAILABILITY_GUARD,
-      DESKTOP_MODEL_AVAILABILITY_GUARD.replace(";if(!(", ";" + DESKTOP_MODEL_AVAILABILITY_SEAM + "if(!("),
-    );
+  const availability = availabilityMatches(body);
+  if (availability.length > 1) throw new Error("Cursor model availability guard is ambiguous.");
+  if (availability.length === 1) {
+    const a = availability[0];
+    if (a.patched) throw new Error("Cursor model availability is already patched.");
+    const seam = "if(" + a.list + ".length>0&&" + a.list + ".every(" + a.item + "=>globalThis.__antigravityBridge?.registeredModel?.(" + a.item + "," + a.blocked + ")))return " + a.stored + ";";
+    body = body.slice(0, a.insert) + seam + body.slice(a.insert);
   }
 
   const glassLists = [...body.matchAll(GLASS_BASE_LIST)];
@@ -263,17 +295,27 @@ export class CursorCompatibility {
     const result = [];
     for (const target of this.targets) {
       const source = await fs.readFile(target.path, "utf8");
-      result.push({ kind: target.kind, file: target.file, ...anchorCounts(source) });
+      result.push({ kind: target.kind, file: target.file, ...(this.options.syntheticFixture ? anchorCounts(source) : nativeCompatibility(source)) });
     }
     return result;
   }
 
   async plan(config: { url: string; token: string }): Promise<CompatibilityPlan> {
+    if (!this.targets.some(target => target.kind === "desktop")) throw new Error("Cursor desktop Workbench is missing.");
     const renderer = await fs.readFile(this.rendererPath, "utf8");
     const targets: CompatibilityTargetPlan[] = [];
     for (const target of this.targets) {
       const source = await fs.readFile(target.path, "utf8");
+      const analyze = this.options.syntheticFixture ? anchorCounts : nativeCompatibility;
+      const before = analyze(source);
+      if (!before.ok || before.adapter) {
+        throw new Error(target.file + ": incompatible native seams: " + before.anchors.filter(a => !a.ok).map(a => a.id + "=" + (a.count + a.patched)).join(", "));
+      }
       const patched = patchSource(source, renderer, config);
+      const after = analyze(patched);
+      if (!after.ok || !after.adapter || after.anchors.some(a => FULL_NATIVE_ANCHORS.has(a.id) && a.count === 1 && a.patched !== 1 && !a.id.startsWith("type_"))) {
+        throw new Error(target.file + ": generated adapter did not pass native seam verification.");
+      }
       targets.push({
         ...target,
         source,

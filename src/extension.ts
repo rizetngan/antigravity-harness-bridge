@@ -39,7 +39,7 @@ async function readPatchState(service: CursorCompatibility): Promise<"enabled" |
   if (invalid.length) {
     throw new Error(
       "当前 Cursor Workbench 与已验证版本不兼容：" +
-      invalid.map((target) => target.file).join(", "),
+      invalid.map((target) => target.file + " [" + target.anchors.filter(a => !a.ok).map(a => a.id + "=" + (a.count + a.patched)).join(", ") + "]").join("; "),
     );
   }
   const patched = targets.filter((target) => target.adapter).length;

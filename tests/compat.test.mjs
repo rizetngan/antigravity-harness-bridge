@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { anchorCounts, patchSource, CursorCompatibility, START, END, EXTENSION_ID } from "../src/cursor/compat.ts";
+import { anchorCounts, patchSource, CursorCompatibility, START, END, EXTENSION_ID, nativeCompatibility } from "../src/cursor/compat.ts";
 
 const source = `
 function makeClient(service,transport){return createClient(service,transport)}
@@ -47,26 +47,36 @@ test("patches the model picker, client factory, native types, and Glass allowlis
 
 
 
-test("keeps Antigravity parameterized Composer models out of Cursor fixUnavailable fallback", () => {
-  const guard = 'const f=d.split(",").map(v=>v.trim()).filter(v=>v.length>0),p=f.map(v=>JXm(v,n,s));if(!(p.length>0&&p.every(v=>n.includes(v)))';
-  const glassSource = source + guard;
-  const patched = patchSource(glassSource, renderer, { url: "http://127.0.0.1:28743", token: "test-token" });
-  assert.ok(patched.includes('if(f.length>0&&f.every(v=>globalThis.__antigravityBridge?.registeredModel?.(v,l)))return u;'));
-  const anchor = anchorCounts(patched).anchors.find((item) => item.id === "model_availability");
-  assert.equal(anchor?.count, 0);
-  assert.equal(anchor?.patched, 1);
-  assert.equal(anchor?.ok, true);
+// Representative shapes from the official 3.28.7 and 3.32.4 bundles,
+// with unrelated implementation omitted. Test that identifier renaming is
+// irrelevant while the blocked-model callback and native config stay intact.
+function availabilityFixture({ stored="u", model="d", list="f", resolved="g", item="_", available="i", field="r", blocked="l", factory="Cdp" } = {}) {
+  return 'const{modelConfigService:t,availableModels:'+available+',specificModelField:'+field+',isModelBlocked:'+blocked+'=()=>!1}=e,'+stored+'=t.getStoredModelConfig('+field+');const '+model+'='+stored+'.modelName;if('+model+'==="default")return '+stored+';const '+list+'='+model+'.split(",").map('+item+'=>'+item+'.trim()).filter('+item+'=>'+item+'.length>0),'+resolved+'='+list+'.map('+item+'=>'+factory+'('+item+','+available+',s));if(!('+resolved+'.length>0&&'+resolved+'.every('+item+'=>'+available+'.includes('+item+')))){if('+available+'.length===0||'+field+'==="background-composer")return '+stored+';log({subkey:"fix_unavailable_model_reset"});}';
+}
+test("recognizes model availability structure across renamed minified identifiers", () => {
+  const variants = [
+    {},
+    { resolved:"p", item:"v", available:"n", factory:"JXm" },
+    { stored:"d", model:"u", list:"p", resolved:"m", item:"S", factory:"ysl" },
+    { stored:"d", model:"u", list:"p", resolved:"g", item:"f", available:"n", field:"s", factory:"NOd" },
+    { stored:"saved", model:"slug", list:"tokens", resolved:"lookup", item:"entry", available:"choices", field:"surface", blocked:"denied", factory:"normalize" },
+  ];
+  for (const variant of variants) {
+    const input = source + availabilityFixture(variant);
+    const before = anchorCounts(input).anchors.find(a => a.id === "model_availability");
+    assert.equal(before.count, 1, JSON.stringify(variant));
+    const patched = patchSource(input, renderer, { url: "http://127.0.0.1:28743", token: "test-token" });
+    const after = anchorCounts(patched).anchors.find(a => a.id === "model_availability");
+    assert.equal(after.patched, 1, JSON.stringify(variant));
+    assert.ok(patched.includes("registeredModel?.(" + (variant.item || "_") + "," + (variant.blocked || "l") + ")"));
+  }
 });
-
-
-test("patches the distinct desktop model-availability guard", () => {
-  const guard = 'const f=d.split(",").map(_=>_.trim()).filter(_=>_.length>0),g=f.map(_=>Cdp(_,i,s));if(!(g.length>0&&g.every(_=>i.includes(_)))';
-  const patched = patchSource(source + guard, renderer, { url: "http://127.0.0.1:28743", token: "test-token" });
-  assert.ok(patched.includes('if(f.length>0&&f.every(_=>globalThis.__antigravityBridge?.registeredModel?.(_,l)))return u;'));
-  const anchor = anchorCounts(patched).anchors.find((item) => item.id === "model_availability_desktop");
-  assert.equal(anchor?.count, 0);
-  assert.equal(anchor?.patched, 1);
-  assert.equal(anchor?.ok, true);
+test("rejects ambiguous or unrelated availability branches and incomplete full native adapters", () => {
+  const fixture = availabilityFixture();
+  assert.equal(anchorCounts(source + fixture.replace('fix_unavailable_model_reset','unrelated')).anchors.find(a=>a.id==="model_availability").count,0);
+  assert.equal(anchorCounts(source + fixture.replace('isModelBlocked:l','unrelated:l')).anchors.find(a=>a.id==="model_availability").count,0);
+  assert.throws(()=>patchSource(source+fixture+"\n"+fixture,renderer,{url:"http://127.0.0.1",token:"test"}),/availability guard is ambiguous/);
+  assert.equal(nativeCompatibility(source).ok,false);
 });
 
 test("refuses ambiguous or already-patched Workbench sources", () => {
@@ -97,7 +107,7 @@ test("updates every declared Workbench checksum without touching source files", 
     };
     writeFileSync(productPath, JSON.stringify(originalProduct));
 
-    const compatibility = new CursorCompatibility(appRoot, storagePath, rendererPath);
+    const compatibility = new CursorCompatibility(appRoot, storagePath, rendererPath, { syntheticFixture: true });
     const plan = await compatibility.plan({
       url: "http://127.0.0.1:28743",
       token: "test-token",
@@ -153,7 +163,7 @@ test("installs and restores the Workbench patch from a hash-verified backup", as
     writeFileSync(productPath, JSON.stringify(originalProduct));
     writeFileSync(signaturePath, "signature-before");
 
-    const compatibility = new CursorCompatibility(appRoot, storagePath, rendererPath);
+    const compatibility = new CursorCompatibility(appRoot, storagePath, rendererPath, { syntheticFixture: true });
     const plan = await compatibility.plan({
       url: "http://127.0.0.1:28743",
       token: "test-token",

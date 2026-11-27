@@ -9,7 +9,9 @@
 - Show distinct missing, installing, login-required and error states; allow recheck after manual installation. Verify the official sign-in command and only close its terminal after a successful login.
 - Request full Cursor quit/reopen after initial integration or recovery, rather than just reloading the window.
 - Preserve the V1.2.0 renderer, provider switching and model routing.
-- Candidate checks: 53 automated tests per platform; fresh-install end-to-end acceptance pending.
+- Multi-version compatibility: discover the model availability guard through stable native properties and local bindings rather than minified identifiers. Require every native picker/Agent seam before modifying resources and report missing or ambiguous seams.
+- Add a read-only-source compatibility matrix probe for syntax, patch installation and byte-exact restore on isolated resource copies.
+- Candidate checks: 54 automated tests on the candidate; official CLI clean-install verified on Windows and macOS. Multi-version UI acceptance pending.
 
 ## 1.2.0 — Windows + macOS
 
