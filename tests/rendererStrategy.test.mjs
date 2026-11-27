@@ -179,3 +179,28 @@ test("explicit stop restores native models, restart shows only bridge models, of
   assert.deepEqual(visible(),["antigravity/gemini-test"]);
   assert.equal(t.nativeCalls(),0);
 });
+
+test("forwards current native roots, not history, main repo, permissions or host window",async()=>{
+ const t=setup();
+ t.turn.resourceAccessor={agentHostSessionOptionsBase:{__agLocalExecution:true,workspacePaths:["D:/Worktree","D:/Second"],worktreeMainPath:"D:/Main",owningProject:{projectAgentId:"a"},getPermissions(){throw Error("must not invoke or export permission callback")}}};
+ t.turn.conversationState.previousWorkspaceUris=["file:///D:/Other"];
+ await t.strategy.executeTurn(t.turn);
+ const body=t.requests.find(r=>r.url.endsWith("/start")).body;
+ assert.deepEqual(body.execution,{kind:"local",workspacePaths:["D:/Worktree","D:/Second"]});
+ assert.doesNotMatch(JSON.stringify(body),/D:\/Main|D:\/Other|projectAgentId|getPermissions/);
+});
+test("each native turn supplies its own roots, including empty, remote and unknown",async()=>{
+ const t=setup();
+ for(const [options,expected] of [
+   [{__agLocalExecution:true,workspacePaths:["D:/A"]},{kind:"local",workspacePaths:["D:/A"]}],
+   [{__agLocalExecution:true,workspacePaths:["D:/B"]},{kind:"local",workspacePaths:["D:/B"]}],
+   [{__agLocalExecution:true,workspacePaths:[]},{kind:"none"}],
+   [{__agLocalExecution:false,workspacePaths:["D:/A"]},{kind:"remote"}],
+   [{workspacePaths:["D:/A"]},{kind:"unknown"}],
+   [undefined,{kind:"unknown"}],
+ ]){
+   t.turn.resourceAccessor={agentHostSessionOptionsBase:options};
+   await t.strategy.executeTurn(t.turn);
+   assert.deepEqual(t.requests.filter(r=>r.url.endsWith("/start")).at(-1).body.execution,expected);
+ }
+});

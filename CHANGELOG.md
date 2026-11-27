@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.4 - Native session workspace (candidate)
+
+- Inherit the current Cursor native Agent Host workspace paths and resolved local/remote execution route instead of the gateway window.
+- Preserve native worktree and ordered multi-root selection, bind ACP sessions and tool callback roots to the current conversation, and resolve relative paths against its cwd.
+- Recreate only the ACP session when its execution scope changes, importing the existing visible history.
+- Keep ordinary no-project chat and do not substitute unrelated local directories for unknown or remote environments.
+- No new project UI, gateway per project, or changes to model selection and service controls.
+
+
 ## 1.2.3 - Compatibility resilience
 
 - Recover clean host updates without rolling back a newer Cursor; merge only bridge-owned product checksum fields and preflight conflicts before recovery writes.

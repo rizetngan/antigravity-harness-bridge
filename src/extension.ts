@@ -319,7 +319,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let patch: PatchState = "checking";
   let reload = false;
   let cli: CliResult = { status: "checking" };
-  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.3" }), context.asAbsolutePath("media/management.html"));
+  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.4" }), context.asAbsolutePath("media/management.html"));
   context.subscriptions.push(panel, vscode.window.registerWebviewViewProvider(VIEW_ID, panel, { webviewOptions: { retainContextWhenHidden: false } }));
   // Cursor can hide the Activity Bar in its Agent-oriented layout. The native
   // status item provides the same one-click entry without changing that layout.

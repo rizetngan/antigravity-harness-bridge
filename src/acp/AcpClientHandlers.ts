@@ -1,9 +1,7 @@
-import * as vscode from "vscode";
 import type { ClientApp } from "@agentclientprotocol/sdk";
 import { FileSystemHandler } from "./handlers/FileSystemHandler.js";
 import { PermissionHandler } from "./handlers/PermissionHandler.js";
 import { TerminalHandler } from "./handlers/TerminalHandler.js";
-import { sessionToolRoots } from "../gateway/workspacePolicy.js";
 
 export class AcpClientHandlers {
   private readonly sessionRoots = new Map<string, string[]>();
@@ -38,8 +36,8 @@ export class AcpClientHandlers {
     );
   }
 
-  registerSession(sessionId: string, cwd: string, toolsEnabled = true): void {
-    this.sessionRoots.set(sessionId, sessionToolRoots(cwd, vscode.workspace.workspaceFolders, toolsEnabled));
+  registerSession(sessionId: string, roots: readonly string[]): void {
+    this.sessionRoots.set(sessionId, [...roots]);
   }
 
   unregisterSession(sessionId: string): void {

@@ -130,11 +130,11 @@ export class TerminalHandler {
   private async assertAllowedCwd(sessionId: string, cwd?: string | null): Promise<string> {
     const roots = this.getRoots(sessionId);
     if (!roots.length) throw new Error("No workspace root is registered for this Antigravity session.");
-    const target = await fs.realpath(cwd || roots[0]);
+    const target = await fs.realpath(path.resolve(roots[0], cwd || "."));
     for (const root of roots) {
       const resolvedRoot = await fs.realpath(root).catch(() => path.resolve(root));
       const relative = path.relative(resolvedRoot, target);
-      if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) return target;
+      if (relative === "" || (relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative))) return target;
     }
     throw new Error("Antigravity terminal execution is restricted to the current workspace.");
   }

@@ -29,6 +29,7 @@ try {
   assert.ok(anchors.every((item) => item.ok && !item.adapter), "Unsupported or already-patched Windows Workbench");
   const plan = await compat.plan({ url: "http://127.0.0.1:28743", token: "windows-copy-test-only" });
   for (const target of plan.targets) {
+    assert.ok(target.patched.includes("ANTIGRAVITY_EXEC_LOCALITY"), "Native locality seam not located in " + target.file);
     const syntaxFile = path.join(root, target.file + ".mjs");
     writeFileSync(syntaxFile, target.patched);
     const result = spawnSync(process.execPath, ["--check", syntaxFile], { encoding: "utf8", windowsHide: true });

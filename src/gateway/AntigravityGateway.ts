@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { sessionWorkspace } from "./workspacePolicy.js";
+import { sessionWorkspace, workspaceIdentity, type SessionWorkspace } from "./workspacePolicy.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -493,7 +493,7 @@ export class AntigravityGateway {
       return this.sendJson(response, 200, {
         ok: true,
         running: this.running,
-        version: "1.2.3",
+        version: "1.2.4",
         profileId: this.profileId,
         catalogRequests: this.catalogRequestCount,
         runRequests: this.runRequestCount,
@@ -669,7 +669,8 @@ export class AntigravityGateway {
       }
     }
 
-    const { cwd, toolsEnabled } = sessionWorkspace(vscode.workspace.workspaceFolders, path.join(this.storageDirectory, "chat-only"));
+    const workspace = await sessionWorkspace(body.execution, path.join(this.storageDirectory, "chat-only"));
+    const { cwd, toolsEnabled, kind } = workspace;
     if (!toolsEnabled) await fs.mkdir(cwd, { recursive: true });
 
     let stored = await this.sessions.get(conversationId);
@@ -683,8 +684,8 @@ export class AntigravityGateway {
       stored = undefined;
     }
 
-    this.output.appendLine(`Starting Cursor conversation ${conversationId.slice(0, 12)} in ${cwd}`);
-    const session = await this.ensureSession(conversationId, cwd, stored, toolsEnabled);
+    this.output.appendLine(`Starting Cursor conversation ${conversationId.slice(0, 12)} (${kind}; ${workspace.roots.length} native workspace roots)`);
+    const session = await this.ensureSession(conversationId, workspace, stored);
     const selection = resolveAcpModelSelection(model, getThinkingEffort(runRequest));
     await this.acp.setConfigOption(session.sessionId, "model", selection.model);
     if (selection.thoughtLevel) {
@@ -727,7 +728,7 @@ export class AntigravityGateway {
     const promptText = buildPromptText(
       [contextText, attachmentContext].filter(Boolean).join("\\n\\n"),
       currentText || "Continue the current task using the imported Cursor conversation context.",
-      [getCustomSystemPrompt(runRequest), !toolsEnabled ? "No local workspace is open. Respond in chat; ask the user to open a local folder if file or terminal operations are needed." : ""].filter(Boolean).join("\n"),
+      [getCustomSystemPrompt(runRequest), !toolsEnabled ? "No verified local execution environment is available for this turn. Respond in chat; do not perform file or terminal operations or substitute another project." : ""].filter(Boolean).join("\n"),
     );
 
     const active: ActiveRun = {
@@ -790,6 +791,7 @@ export class AntigravityGateway {
           composerId: conversationId,
           sessionId: session.sessionId,
           cwd,
+          workspaceIdentity: workspaceIdentity(workspace),
           modelId: selection.model,
           lastVisibleMessageCount: projectedMessageCount,
           lastAgentMessageCount: snapshot.agentMessages.length,
@@ -814,20 +816,20 @@ export class AntigravityGateway {
 
   private async ensureSession(
     composerId: string,
-    cwd: string,
+    workspace: SessionWorkspace,
     stored?: CursorAcpSessionRecord,
-    toolsEnabled = true,
   ): Promise<{ sessionId: string; isNew: boolean }> {
-    if (stored && samePath(stored.cwd, cwd)) {
+    const { cwd, roots } = workspace;
+    if (stored && samePath(stored.cwd, cwd) && stored.workspaceIdentity === workspaceIdentity(workspace)) {
       try {
-        await this.acp.loadSession(stored.sessionId, cwd, toolsEnabled);
+        await this.acp.loadSession(stored.sessionId, cwd, roots);
         return { sessionId: stored.sessionId, isNew: false };
       } catch (error) {
         this.output.appendLine(`Stored Antigravity session could not be resumed; creating a new session: ${safeError(error)}`);
         await this.sessions.delete(composerId);
       }
     }
-    const created = await this.acp.createSession(cwd, toolsEnabled);
+    const created = await this.acp.createSession(cwd, roots);
     return { sessionId: created.sessionId, isNew: true };
   }
 

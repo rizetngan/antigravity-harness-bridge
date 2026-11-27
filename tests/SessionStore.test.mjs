@@ -13,6 +13,7 @@ test("persists and reloads Cursor-to-ACP session mappings", async () => {
       composerId: "composer-1",
       sessionId: "acp-session-1",
       cwd: "/workspace/project",
+      workspaceIdentity: "[native session scope]",
       modelId: "claude-opus-5.5",
       lastVisibleMessageCount: 12,
       lastAgentMessageCount: 34,
@@ -27,4 +28,17 @@ test("persists and reloads Cursor-to-ACP session mappings", async () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("concurrent first reads wait for the same existing mappings",async()=>{
+ const directory=mkdtempSync(join(tmpdir(),"antigravity-concurrent-store-"));
+ try{
+  const first=new SessionStore(directory);
+  const entry=id=>({composerId:id,sessionId:"acp-"+id,cwd:"/project/"+id,modelId:"model",lastVisibleMessageCount:0,lastAgentMessageCount:0,updatedAt:0});
+  await Promise.all([first.set(entry("a")),first.set(entry("b"))]);
+  await first.dispose();
+  const second=new SessionStore(directory);
+  const [a,b]=await Promise.all([second.get("a"),second.get("b")]);
+  assert.equal(a.sessionId,"acp-a");assert.equal(b.sessionId,"acp-b");
+ }finally{rmSync(directory,{recursive:true,force:true});}
 });

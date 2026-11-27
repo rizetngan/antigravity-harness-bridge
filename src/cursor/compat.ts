@@ -38,6 +38,23 @@ const GLASS_BASE_LIST = /([\w$]+)=\["anysphere\.cursor-resolver","anysphere\.cur
 const GLASS_SEAM_MARK = "/* ANTIGRAVITY_GLASS_EXTENSION */";
 const GLASS_SEAM_TEXT = GLASS_SEAM_MARK + JSON.stringify(EXTENSION_ID) + ",";
 
+// The native accessor receives the authority resolved by ComposerExecRouting.
+ // Only copy its locality to the existing session options. Never infer locality from path spelling.
+const EXEC_ACCESSOR = /createRemoteAccessor\(([\w$]+(?:,[\w$]+){7})\)\{/g;
+const EXEC_OPTIONS = /agentHostSessionOptionsBase:\{workspacePaths:([\w$]+)\.workspacePaths,worktreeMainPath:\1\.worktreeMainPath,isGlassRoot:\1\.isGlassRoot,/g;
+export function patchExecutionLocality(source: string): string {
+  const matches = [...source.matchAll(EXEC_ACCESSOR)];
+  if (matches.length !== 1) return source;
+  const match = matches[0];
+  const authority = match[1].split(",")[7];
+  const start = match.index! + match[0].length;
+  const section = source.slice(start, start + 18000);
+  const options = [...section.matchAll(EXEC_OPTIONS)];
+  if (options.length !== 1) return source;
+  const at = start + options[0].index! + options[0][0].length;
+  return source.slice(0, at) + "/* ANTIGRAVITY_EXEC_LOCALITY */__agLocalExecution:(" + authority + "==null)," + source.slice(at);
+}
+
 const NATIVE_TYPES = ["UserMessage", "ConversationStep", "ConversationTurnStructure"];
 const STRATEGY = /this\._executionStrategy=([\w$]+\?\.executionStrategy\?\?new [\w$]+\(this\.agentClientService\)),/g;
 const STRATEGY_MARK = "/* ANTIGRAVITY_TURN_STRATEGY */";
@@ -265,6 +282,7 @@ export function patchSource(
     "return " + SETTINGS_PICKER_MARK + "(function(__agModels){return globalThis.__antigravityBridge?.filterVisibleModels?.(__agModels)??__agModels})(" + expression + ")");
   body = body.replace(PICKER_PROPS, (_all, head: string, models: string, ids: string, middle: string, hideAuto: string) =>
     head + PICKER_PROPS_MARK + "(function(__agIds){return globalThis.__antigravityBridge?.preferredVisibleIds?.(__agIds," + models + "())??__agIds})(" + ids + ")" + middle + "(" + hideAuto + "||globalThis.__antigravityBridge?.isProviderActive?.()===true)");
+  body = patchExecutionLocality(body);
   return START + "\n" + runtime + "\n" + END + "\n" + body;
 }
 

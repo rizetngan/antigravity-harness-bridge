@@ -58,9 +58,9 @@ export class FileSystemHandler {
   }
 
   private async assertAllowed(sessionId: string, requestedPath: string, allowMissing: boolean): Promise<string> {
-    const target = path.resolve(requestedPath);
     const roots = this.getRoots(sessionId);
     if (!roots.length) throw new Error("No workspace root is registered for this Antigravity session.");
+    const target = path.resolve(roots[0], requestedPath);
 
     const checkedPath = allowMissing
       ? await nearestExistingPath(path.dirname(target))
@@ -99,5 +99,5 @@ async function nearestExistingPath(candidate: string): Promise<string> {
 
 function isInside(root: string, target: string): boolean {
   const relative = path.relative(root, target);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return relative === "" || (relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative));
 }

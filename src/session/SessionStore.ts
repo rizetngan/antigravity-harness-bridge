@@ -11,6 +11,7 @@ export interface CursorAcpSessionRecord {
   lastAgentMessageCount: number;
   updatedAt: number;
   nativeHistoryFingerprint?: string;
+  workspaceIdentity?: string;
 }
 
 interface StoreFile {
@@ -21,7 +22,7 @@ interface StoreFile {
 export class SessionStore {
   private readonly filePath: string;
   private readonly sessions = new Map<string, CursorAcpSessionRecord>();
-  private loaded = false;
+  private loadPromise?: Promise<void>;
   private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(storageDirectory: string) {
@@ -50,9 +51,11 @@ export class SessionStore {
     await this.writeQueue;
   }
 
-  private async load(): Promise<void> {
-    if (this.loaded) return;
-    this.loaded = true;
+  private load(): Promise<void> {
+    return this.loadPromise ??= this.readStore();
+  }
+
+  private async readStore(): Promise<void> {
     try {
       const raw = await fs.readFile(this.filePath, "utf8");
       const parsed = JSON.parse(raw) as StoreFile;
@@ -68,6 +71,7 @@ export class SessionStore {
           lastVisibleMessageCount: Math.max(0, Number(item.lastVisibleMessageCount) || 0),
           lastAgentMessageCount: Math.max(0, Number(item.lastAgentMessageCount) || 0),
           updatedAt: Number(item.updatedAt) || 0,
+          ...(typeof item.workspaceIdentity === "string" ? { workspaceIdentity: item.workspaceIdentity } : {}),
           ...(typeof item.nativeHistoryFingerprint === "string" && /^[a-f0-9]{64}$/.test(item.nativeHistoryFingerprint) ? { nativeHistoryFingerprint: item.nativeHistoryFingerprint } : {}),
         });
       }

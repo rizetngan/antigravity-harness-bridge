@@ -533,6 +533,16 @@
     }
     return { source: 'native-turns', totalTurns: refs.length, entries };
   }
+  function executionContext(turn) {
+    const options = turn?.resourceAccessor?.agentHostSessionOptionsBase;
+    if (!options || !Array.isArray(options.workspacePaths)) return { kind: 'unknown' };
+    if (options.__agLocalExecution === false) return { kind: 'remote' };
+    if (options.workspacePaths.length === 0) return { kind: 'none' };
+    if (options.__agLocalExecution !== true || !options.workspacePaths.every(p => typeof p === 'string')) return { kind: 'unknown' };
+    // The native host already resolved project/worktree routing. Do not add the
+    // main worktree path or the gateway window's folders to these roots.
+    return { kind: 'local', workspacePaths: [...options.workspacePaths] };
+  }
   async function executeBridgeTurn(turn) {
     const run = {
       conversationId: turn.conversationId,
@@ -579,7 +589,7 @@
       }
       trace('ACP strategy turn', { modelId: first.runRequest.requestedModel.modelId });
       turn.runOptions?.onNetworkPhaseStart?.();
-      const response = await call('/sessions/' + id + '/start', { first, history }, controller.signal);
+      const response = await call('/sessions/' + id + '/start', { first, history, execution: executionContext(turn) }, controller.signal);
       turn.runOptions?.onHeader?.(new Headers());
       for await (const item of ndjson(response)) {
         if (item.error) throw new Error(item.error);
@@ -615,7 +625,7 @@
     }
   }
   globalThis.__antigravityBridge = {
-    version: 17,
+    version: 18,
     isProviderActive: () => providerActive,
     filterVisibleModels,
     preferredVisibleIds,

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { anchorCounts, patchSource, CursorCompatibility, START, END, EXTENSION_ID, nativeCompatibility } from "../src/cursor/compat.ts";
+import { anchorCounts, patchSource, CursorCompatibility, START, END, EXTENSION_ID, nativeCompatibility, patchExecutionLocality } from "../src/cursor/compat.ts";
 
 const source = `
 function makeClient(service,transport){return createClient(service,transport)}
@@ -294,4 +294,17 @@ test("a changed unpatched Workbench is not blessed with a new checksum when meta
    await assert.rejects(compat.restore(),/old bridge checksum/);
    assert.equal(readFileSync(desktop,"utf8"),updated);assert.equal(readFileSync(glass,"utf8"),glassBefore);assert.equal(readFileSync(product,"utf8"),before);
  });
+});
+
+test("optional native locality adapter follows resolved authority, independent of minified names",()=>{
+ for(const [arg,root] of [["a","i"],["remoteAuthority","options"]]){
+  const shape="createRemoteAccessor(x,y,z,"+root+",p,q,r,"+arg+"){return{agentHostSessionOptionsBase:{workspacePaths:"+root+".workspacePaths,worktreeMainPath:"+root+".worktreeMainPath,isGlassRoot:"+root+".isGlassRoot,getPermissions:p}}}";
+  const patched=patchExecutionLocality(shape);
+  assert.match(patched,/ANTIGRAVITY_EXEC_LOCALITY/);
+  const f=new Function("return ({"+patched+"}).createRemoteAccessor")();
+  const opts={workspacePaths:["D:/Project"],worktreeMainPath:"D:/Main",isGlassRoot:false};
+  assert.equal(f(null,null,null,opts,null,null,null,undefined).agentHostSessionOptionsBase.__agLocalExecution,true);
+  assert.equal(f(null,null,null,opts,null,null,null,"ssh-remote+host").agentHostSessionOptionsBase.__agLocalExecution,false);
+  assert.equal(patchExecutionLocality(shape+shape),shape+shape);
+ }
 });

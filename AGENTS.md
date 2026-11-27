@@ -12,7 +12,7 @@ Expose the models available to the signed-in Antigravity CLI account in Cursor's
 - Use Google's official `agy acp` process as the upstream.
 - Use the stable ACP v1 TypeScript SDK unless a tested capability requires otherwise.
 - Discover models and session options dynamically from ACP. Never hardcode a model catalogue.
-- Cursor remains the conversation shell and transcript owner.
+- Cursor remains the conversation shell and transcript owner. Inherit its current native execution context and project selection; never use the gateway-owning window as a session directory source. Do not build separate project/worktree management.
 - Antigravity ACP owns execution, tool orchestration, permissions, and its own session.
 - Map ACP updates into Cursor's native conversation events where the private API permits.
 
