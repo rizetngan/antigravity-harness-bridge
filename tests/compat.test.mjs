@@ -178,7 +178,9 @@ test("installs and restores the Workbench patch from a hash-verified backup", as
     assert.notDeepEqual(installedProduct, originalProduct);
     assert.equal(JSON.parse(readFileSync(join(storagePath, "compatibility.json"), "utf8")).state, "installed");
 
-    await compatibility.restore();
+    const restoreRoot = process.platform === "win32" ? appRoot.replace(/^[A-Za-z]/, (drive) => drive === drive.toLowerCase() ? drive.toUpperCase() : drive.toLowerCase()) : appRoot;
+    const restoreCompatibility = new CursorCompatibility(restoreRoot, storagePath, rendererPath, { syntheticFixture: true });
+    await restoreCompatibility.restore();
     assert.equal(readFileSync(desktopPath, "utf8"), source);
     assert.equal(readFileSync(glassPath, "utf8"), source);
     assert.deepEqual(JSON.parse(readFileSync(productPath, "utf8")), originalProduct);

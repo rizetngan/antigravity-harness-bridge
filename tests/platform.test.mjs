@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -30,4 +31,12 @@ test("write probe tests real create permission rather than advisory W_OK", async
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("Windows PowerShell array splatting preserves paths with spaces and apostrophes", { skip: process.platform !== "win32" }, () => {
+  const args = ["D:/Cursor Space/cursor/resources/app", "D:/Antigravity for Cursor", "D:/O'Neil/renderer.js"];
+  const script = "$a = @(" + args.map(powershellQuote).join(", ") + "); & " + powershellQuote(process.execPath) + " -e 'console.log(JSON.stringify(process.argv.slice(1)))' @a";
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  const output = execFileSync("powershell.exe", ["-NoProfile", "-EncodedCommand", encoded], { encoding: "utf8" });
+  assert.deepEqual(JSON.parse(output.trim()), args);
 });

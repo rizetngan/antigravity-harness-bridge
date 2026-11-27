@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2 — Windows path compatibility fix
+
+- Normalize Windows installation and profile identity across drive-letter case, directory case, separators and trailing slashes, without changing paths used for file I/O.
+- Reuse matching legacy journals and gateway endpoints so an existing patch can continue working and be restored after an upgrade.
+- Compare restore and session paths using platform-aware path semantics. Keep the checks that protect actual Workbench writes and original-file recovery.
+- Regression coverage for Windows path variants, old journal reuse, case-varied restore, and PowerShell argument passing with spaces and apostrophes.
+
+
 
 ## 1.2.1 — CLI onboarding and multi-version compatibility
 

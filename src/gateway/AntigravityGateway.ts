@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
-import { isCursorResources, platformPaths } from "../platform.ts";
+import { isCursorResources, platformPaths, pathIdentity, samePath } from "../platform.ts";
 import path from "node:path";
 import { AntigravityAcpProcess, type AntigravityCatalogue } from "../acp/AntigravityAcpProcess.js";
 import { AcpClientHandlers } from "../acp/AcpClientHandlers.js";
@@ -123,7 +123,7 @@ export class AntigravityGateway {
     this.storageDirectory = location.directory;
     this.port = location.port;
     this.reader = new CursorConversationReader(profileStorage ? path.join(path.dirname(profileStorage), "state.vscdb") : path.join(location.directory, "state.vscdb"));
-    this.profileId = profileStorage ? createHash("sha256").update(path.resolve(profileStorage)).digest("hex").slice(0, 20) : "probe";
+    this.profileId = profileStorage ? createHash("sha256").update(pathIdentity(profileStorage)).digest("hex").slice(0, 20) : "probe";
     this.sessions = new SessionStore(profileStorage ? path.join(profileStorage, "acp-sessions") : this.storageDirectory);
   }
 
@@ -780,7 +780,7 @@ export class AntigravityGateway {
     cwd: string,
     stored?: CursorAcpSessionRecord,
   ): Promise<{ sessionId: string; isNew: boolean }> {
-    if (stored && path.resolve(stored.cwd) === path.resolve(cwd)) {
+    if (stored && samePath(stored.cwd, cwd)) {
       try {
         await this.acp.loadSession(stored.sessionId, cwd);
         return { sessionId: stored.sessionId, isNew: false };

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { samePath } from "../platform.ts";
 
 export const START = "/* ANTIGRAVITY_BRIDGE_RUNTIME_START v1 */";
 export const END = "/* ANTIGRAVITY_BRIDGE_RUNTIME_END v1 */";
@@ -428,7 +429,7 @@ export class CursorCompatibility {
       patchedProductHash: string;
       state: string;
     };
-    if (path.resolve(journal.appRoot) !== this.appRoot) {
+    if (!samePath(journal.appRoot, this.appRoot)) {
       throw new Error("The compatibility backup belongs to a different Cursor installation.");
     }
     await this.restoreFromJournal(journal);

@@ -1,9 +1,8 @@
 import * as vscode from "vscode";
-import { createHash } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
-import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, probeDirectoryWritable, powershellQuote } from "./platform.ts";
+import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, probeDirectoryWritable, powershellQuote, installationKey, samePath } from "./platform.ts";
 import path from "node:path";
 import { buildLoginCommand, ensureCli, inspectCli, type CliResult } from "./cliSetup.js";
 import { AntigravityGateway } from "./gateway/AntigravityGateway.js";
@@ -15,10 +14,10 @@ let loginTerminal: vscode.Terminal | undefined;
 
 function createCompatibility(context: vscode.ExtensionContext, allowOriginalApp = false) {
   const appRoot = path.resolve(vscode.env.appRoot);
-  const appKey = createHash("sha256").update(appRoot).digest("hex").slice(0, 16);
   const supportPath = platformPaths().support;
+  const appKey = installationKey(supportPath, appRoot);
   const testRoot = path.join(homedir(), "Applications", "Cursor-Antigravity-Test.app", "Contents", "Resources", "app");
-  const storagePath = appRoot === testRoot
+  const storagePath = samePath(appRoot, testRoot)
     ? path.join(supportPath, "compatibility-test")
     : path.join(supportPath, "compatibility", appKey);
   const recoveryPath = path.join(supportPath, "recovery", appKey);
@@ -315,7 +314,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let patch: PatchState = "checking";
   let reload = false;
   let cli: CliResult = { status: "checking" };
-  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.1" }), context.asAbsolutePath("media/management.html"));
+  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.2" }), context.asAbsolutePath("media/management.html"));
   context.subscriptions.push(panel, vscode.window.registerWebviewViewProvider(VIEW_ID, panel, { webviewOptions: { retainContextWhenHidden: false } }));
   // Cursor can hide the Activity Bar in its Agent-oriented layout. The native
   // status item provides the same one-click entry without changing that layout.

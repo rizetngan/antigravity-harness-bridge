@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -70,4 +70,40 @@ export function resolveNodeExecutable(): string {
 
 export function powershellQuote(value: string): string {
   return "'" + value.replace(/'/g, "''") + "'";
+}
+
+// Use OS path semantics for identity, never alter the actual path used for I/O.
+export function pathIdentity(value: string, platform = process.platform): string {
+  const resolved = (platform === "win32" ? path.win32 : path).resolve(value);
+  return platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+export function samePath(a: string, b: string, platform = process.platform): boolean {
+  return pathIdentity(a, platform) === pathIdentity(b, platform);
+}
+
+function identityKey(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
+
+// A previously patched Workbench embeds its original gateway port and token.
+// Adopt its existing journal/key instead of orphaning that installation on upgrade.
+export function installationKey(support: string, appRoot: string, platform = process.platform): string {
+  const canonical = identityKey(pathIdentity(appRoot, platform));
+  if (platform !== "win32") return canonical;
+  const root = path.join(support, "compatibility");
+  const matches: { key: string; installed: boolean; modified: number }[] = [];
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !/^[a-f0-9]{16}$/.test(entry.name)) continue;
+      const journal = path.join(root, entry.name, "compatibility.json");
+      try {
+        const data = JSON.parse(readFileSync(journal, "utf8"));
+        if (typeof data.appRoot !== "string" || !samePath(data.appRoot, appRoot, platform)) continue;
+        matches.push({ key: entry.name, installed: data.state === "installed" || data.state === "prepared", modified: statSync(journal).mtimeMs });
+      } catch { /* unrelated or incomplete journals do not block discovery */ }
+    }
+  } catch { /* a new installation has no journal yet */ }
+  matches.sort((a, b) => Number(b.installed) - Number(a.installed) || b.modified - a.modified || a.key.localeCompare(b.key));
+  return matches[0]?.key ?? canonical;
 }

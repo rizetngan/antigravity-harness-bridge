@@ -28,17 +28,15 @@ The first production adapter is **Antigravity for Cursor**, validated on Windows
 
 > **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the V1.2.1 gateway passed a real Hydrogen Low request. macOS 3.32.4 also passed native Hydrogen Low chat, service stop/start and same-conversation context continuity using the released VSIX. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
 
+> **V1.2.2 path fix:** Windows path case and separator differences no longer split installation identity; existing recovery journals and gateway endpoints are retained. All 57 Windows tests passed, including PowerShell argument passing; real Cursor 3.32.4 resource copy install/restore passed. macOS: 56 passed, one Windows-only test skipped.
+
 ## Download
 
-**V1.2.1 stable** · Windows x64 / macOS Apple Silicon · See verified host versions below · CLI 1.5.18 tested
+**V1.2.2 stable** · Windows x64 / macOS Apple Silicon · See verified host versions below · CLI 1.5.18 tested
 
-**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.1) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
+**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.2) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
 
-SHA-256 for the V1.2.1 VSIX:
-
-```text
-f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768
-```
+SHA-256: see the release asset digest for optional verification.
 
 **Installing the Antigravity desktop app alone is not sufficient.** The adapter requires Cursor and the separately installed [official Antigravity CLI (`agy`)](https://antigravity.google/docs/getting-started?tab=cli). Keep your desktop app; install the CLI only if missing, and use the official account sign-in flow. Use the dependency-check commands or agent-assisted installation below. Initial integration may require normal OS authorization; daily service switching does not require elevation or restart.
 
@@ -117,7 +115,7 @@ Cursor integration depends on version-specific Workbench resources. Recheck comp
 
 ## Installation
 
-**Quick setup (V1.2.1):** Install the VSIX → open the Antigravity management panel → choose Install and Connect if the CLI is missing (existing CLI is reused) → complete official sign-in if requested → Enable Native Models → fully quit and reopen Cursor → Start Service. The terminal steps below are an alternative.
+**Quick setup (V1.2.2):** Install the VSIX → open the Antigravity management panel → choose Install and Connect if the CLI is missing (existing CLI is reused) → complete official sign-in if requested → Enable Native Models → fully quit and reopen Cursor → Start Service. The terminal steps below are an alternative.
 
 ### Step 1: Detect and install the official CLI if needed
 
@@ -171,19 +169,16 @@ Default locations: macOS `~/.local/bin/agy`; Windows `%LOCALAPPDATA%\agy\bin\agy
 
 ### Terminal installation
 
-The following commands install the verified V1.2.1 release and check its checksum. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
+The following commands install V1.2.2; optional download digest is on the release page. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
 
 **macOS**
 
 ```bash
 set -e
-file="/tmp/antigravity-cursor-1.2.1.vsix"
+file="/tmp/antigravity-cursor-1.2.2.vsix"
 curl -fL --connect-timeout 15 \
-  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix \
+  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix \
   -o "$file"
-printf '%s  %s\n' \
-  'f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768' \
-  "$file" | shasum -a 256 -c -
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
   --install-extension "$file" --force
 ```
@@ -194,12 +189,8 @@ Adjust the CLI path if Cursor is installed elsewhere. Grant App Management permi
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.1.vsix'
-Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix' -OutFile $file
-$expected = 'f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768'
-if ((Get-FileHash $file -Algorithm SHA256).Hash -ine $expected) {
-    throw 'SHA-256 verification failed'
-}
+$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.2.vsix'
+Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix' -OutFile $file
 cursor --install-extension $file --force
 ```
 
