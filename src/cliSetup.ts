@@ -15,7 +15,7 @@ const run: Run = async (file, args, timeout) => {
 };
 export function officialInstaller(platform: string): { file: string; args: string[] } {
   if (platform === "darwin") return { file: "/bin/bash", args: ["-o", "pipefail", "-c", "/usr/bin/curl -fsSL --connect-timeout 15 https://antigravity.google/cli/install.sh | /bin/bash"] };
-  if (platform === "win32") return { file: "powershell.exe", args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; Invoke-RestMethod https://antigravity.google/cli/install.ps1 | Invoke-Expression"] };
+  if (platform === "win32") return { file: "powershell.exe", args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; $installer = [scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1')); & $installer --skip-path --skip-aliases"] };
   throw new Error("当前平台未验证 CLI 自动安装，请使用 Google 官方安装指南。");
 }
 

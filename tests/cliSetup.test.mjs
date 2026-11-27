@@ -24,6 +24,8 @@ test("failed installer or missing post-install CLI fails closed",async()=>{
 });
 test("installer uses only fixed official Google commands for supported systems",()=>{
  assert.match(officialInstaller("darwin").args.join(" "),/https:\/\/antigravity\.google\/cli\/install\.sh/);
- assert.match(officialInstaller("win32").args.join(" "),/https:\/\/antigravity\.google\/cli\/install\.ps1/);
+ const win=officialInstaller("win32").args.join(" ");
+ assert.match(win,/https:\/\/antigravity\.google\/cli\/install\.ps1/);
+ assert.match(win,/--skip-path/);assert.match(win,/--skip-aliases/);assert.doesNotMatch(win,/Invoke-Expression/);
  assert.throws(()=>officialInstaller("linux"),/未验证/);
 });
