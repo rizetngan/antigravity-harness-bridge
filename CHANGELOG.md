@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 1.2.1 — CLI onboarding candidate
+
+- Detect the official Antigravity CLI and ACP support before enabling native models.
+- Install the official CLI only when missing, from Google's installer; reuse an existing working executable.
+- Guide official sign-in, refresh models automatically when the login terminal exits, and check account model access before patching Workbench.
+- Show distinct missing, installing, login-required and error states; allow recheck after manual installation.
+- Request full Cursor quit/reopen after initial integration or recovery, rather than just reloading the window.
+- Preserve the V1.2.0 renderer, provider switching and model routing.
+- Candidate checks: 53 automated tests per platform; fresh-install end-to-end acceptance pending.
+
 ## 1.2.0 — Windows + macOS
 
 ### Added

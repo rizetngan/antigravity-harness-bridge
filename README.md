@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/antigravity.svg" width="92" alt="Antigravity Agent Bridge icon">
+<img src="docs/images/antigravity-logo.png" width="92" alt="Antigravity Agent Bridge icon">
 
 # Antigravity Agent Bridge
 
