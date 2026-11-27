@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { platformPaths, resolveAgyExecutable } from "./platform.ts";
+import { platformPaths, resolveAgyExecutable, powershellQuote } from "./platform.ts";
 
 export type CliStatus = "checking" | "missing" | "ready" | "error" | "installing";
 export type CliResult = { status: CliStatus; version?: string; detail?: string };
@@ -13,6 +13,11 @@ const run: Run = async (file, args, timeout) => {
   const r = await exec(file, args, { cwd: homedir(), encoding: "utf8", windowsHide: true, timeout, maxBuffer: 2 * 1024 * 1024 });
   return r.stdout.trim();
 };
+export function buildLoginCommand(executable: string, platform: string): string {
+  if (platform === "win32") return "& " + powershellQuote(executable) + " acp --login; if ($LASTEXITCODE -eq 0) { exit }";
+  return "'" + executable.replace(/'/g, "'\\''") + "' acp --login && exit";
+}
+
 export function officialInstaller(platform: string): { file: string; args: string[] } {
   if (platform === "darwin") return { file: "/bin/bash", args: ["-o", "pipefail", "-c", "/usr/bin/curl -fsSL --connect-timeout 15 https://antigravity.google/cli/install.sh | /bin/bash"] };
   if (platform === "win32") return { file: "powershell.exe", args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; $installer = [scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1')); & $installer --skip-path --skip-aliases"] };

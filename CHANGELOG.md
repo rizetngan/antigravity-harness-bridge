@@ -6,7 +6,7 @@
 - Detect the official Antigravity CLI and ACP support before enabling native models.
 - Install the official CLI only when missing, from Google's installer; reuse an existing working executable. Windows setup keeps the CLI in its official per-user directory without rewriting PATH or shell aliases.
 - Guide official sign-in, refresh models automatically when the login terminal exits, and check account model access before patching Workbench.
-- Show distinct missing, installing, login-required and error states; allow recheck after manual installation.
+- Show distinct missing, installing, login-required and error states; allow recheck after manual installation. Verify the official sign-in command and only close its terminal after a successful login.
 - Request full Cursor quit/reopen after initial integration or recovery, rather than just reloading the window.
 - Preserve the V1.2.0 renderer, provider switching and model routing.
 - Candidate checks: 53 automated tests per platform; fresh-install end-to-end acceptance pending.

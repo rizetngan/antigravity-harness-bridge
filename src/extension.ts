@@ -5,7 +5,7 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, probeDirectoryWritable, powershellQuote } from "./platform.ts";
 import path from "node:path";
-import { ensureCli, inspectCli, type CliResult } from "./cliSetup.js";
+import { buildLoginCommand, ensureCli, inspectCli, type CliResult } from "./cliSetup.js";
 import { AntigravityGateway } from "./gateway/AntigravityGateway.js";
 import { CursorCompatibility } from "./cursor/compat.js";
 import { ManagementView, VIEW_ID, type PatchState } from "./ui/ManagementView.js";
@@ -54,10 +54,6 @@ async function offerReload(message: string): Promise<void> {
   });
 }
 
-function shellQuote(value: string): string {
-  return "'" + value.replace(/'/g, "'\\''") + "'";
-}
-
 function isAuthenticationRequired(message: string): boolean {
   return /authentication required|please sign in|not signed in/i.test(message);
 }
@@ -101,7 +97,7 @@ async function openAgyLoginTerminal(
   context.subscriptions.push(closeListener);
 
   terminal.show(true);
-  terminal.sendText((windows ? "& " + powershellQuote(executable) + " acp --login; if ($LASTEXITCODE -eq 0) { exit }" : shellQuote(executable) + " acp --login && exit"));
+  terminal.sendText(buildLoginCommand(executable, process.platform));
   void vscode.window.showInformationMessage(
     "请按终端提示完成 Google 账号登录。成功后终端自动关闭，插件会刷新模型目录。",
   );
@@ -109,6 +105,10 @@ async function openAgyLoginTerminal(
 
 function appleScriptQuote(value: string): string {
   return '"' + value.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+}
+
+function shellQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
 async function canWriteDirectory(filePath: string): Promise<boolean> {

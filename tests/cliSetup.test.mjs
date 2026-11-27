@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectCli, ensureCli, officialInstaller } from "../src/cliSetup.ts";
+import { inspectCli, ensureCli, officialInstaller, buildLoginCommand } from "../src/cliSetup.ts";
 test("working CLI verifies version and ACP without installation",async()=>{
  const calls=[];const r=await inspectCli(()=>"/test/agy",async(file,args)=>{calls.push([file,args]);return "1.5.18"},false);
  assert.equal(r.status,"ready");assert.deepEqual(calls,[["/test/agy",["--version"]],["/test/agy",["acp","--help"]]]);
@@ -28,4 +28,12 @@ test("installer uses only fixed official Google commands for supported systems",
  assert.match(win,/https:\/\/antigravity\.google\/cli\/install\.ps1/);
  assert.match(win,/--skip-path/);assert.match(win,/--skip-aliases/);assert.doesNotMatch(win,/Invoke-Expression/);
  assert.throws(()=>officialInstaller("linux"),/未验证/);
+});
+
+test("official login command is correctly quoted and closes only on success",()=>{
+ const win=buildLoginCommand("C:\\Program Files\\Antigravity\\agy.exe","win32");
+ assert.equal(win,"& 'C:\\Program Files\\Antigravity\\agy.exe' acp --login; if ($LASTEXITCODE -eq 0) { exit }");
+ assert.match(win,/acp --login/);assert.match(win,/LASTEXITCODE -eq 0/);
+ const mac=buildLoginCommand("/Users/O'Brien/.local/bin/agy","darwin");
+ assert.equal(mac,"'/Users/O'\\''Brien/.local/bin/agy' acp --login && exit");
 });
