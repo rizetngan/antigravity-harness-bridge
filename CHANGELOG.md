@@ -11,7 +11,7 @@
 - Preserve the V1.2.0 renderer, provider switching and model routing.
 - Multi-version compatibility: discover the model availability guard through stable native properties and local bindings rather than minified identifiers. Require every native picker/Agent seam before modifying resources and report missing or ambiguous seams.
 - Add a read-only-source compatibility matrix probe for syntax, patch installation and byte-exact restore on isolated resource copies.
-- Candidate checks: 54 automated tests on the candidate; official CLI clean-install verified on Windows and macOS. Multi-version UI acceptance pending.
+- Candidate checks: 54 automated tests on both platforms; official CLI clean-install verified on Windows and macOS. Real Cursor 3.28.7 and 3.32.4 resources passed structural, syntax, installation and byte-exact restore checks on both platforms. Windows 3.28.7 native Hydrogen Low chat passed; 3.32.4 loaded 11 Antigravity model families, but the test account's host model picker requires a paid Cursor plan. Windows 3.32.4 native chat and macOS 3.32.4 live UI acceptance remain pending. The adapter does not bypass host subscription gates.
 
 ## 1.2.0 — Windows + macOS
 

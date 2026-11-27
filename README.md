@@ -26,6 +26,8 @@ Antigravity Agent Bridge is built around Google's official Antigravity CLI and A
 
 The first production adapter is **Antigravity for Cursor**, validated on Windows and macOS. Other agent harnesses can use direct ACP where supported, or dedicated adapters where deeper integration is needed.
 
+> **V1.2.1 candidate (not yet released):** The management panel detects the official CLI and offers Install and Connect when missing; an existing working CLI is reused. Complete official sign-in, enable native models, then fully quit and reopen Cursor. Clean CLI installation, 54 automated tests, and actual Workbench patch/install/byte-exact restore for 3.28.7 and 3.32.4 passed. Windows 3.28.7 native Hydrogen Low chat passed; Windows 3.32.4 loaded all 11 model families, but its test account's native picker is locked by Cursor's subscription requirement, so native chat remains unverified. macOS 3.32.4 live UI acceptance is pending. Stable download links below still point to V1.2.0.
+
 ## Download
 
 **V1.2.0 stable** · Windows x64 / macOS Apple Silicon · Verified with Cursor 3.28.7 and Antigravity CLI 1.5.18
@@ -103,6 +105,8 @@ For a client that already supports ACP, prefer Google's direct `agy acp` connect
 | --- | --- | --- |
 | Windows x64 + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; UAC for protected directories |
 | macOS Apple Silicon + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; App Management authorization as needed |
+| Windows x64 + Cursor 3.32.4 | V1.2.1 candidate: resources and catalogue verified; host subscription gates native picker | Native chat pending |
+| macOS Apple Silicon + Cursor 3.32.4 | V1.2.1 candidate: resources and exact restore verified | Live UI pending |
 | Windows ARM64 / Intel Mac / Linux | Not live-tested | Compatibility not established |
 | Zed, JetBrains and other ACP clients | Official direct ACP path | Follow client-specific Google documentation |
 | Other non-ACP agent harnesses | Future adapters | Host-specific validation required |
@@ -205,6 +209,7 @@ Copy this prompt into an agent with access to the local computer, such as ChatGP
 Install the latest stable Antigravity Agent Bridge on this computer:
 https://github.com/rizetngan/antigravity-harness-bridge
 
+0. Use a stable release, not an unvalidated candidate. When the version provides Install and Connect in the panel, prefer it and reuse any working CLI. Verify that the Cursor account can access its native model picker; do not bypass host subscription checks.
 1. Check OS, architecture, Cursor and CLI. The Antigravity desktop app is not the CLI. Check PATH and the official default locations (macOS ~/.local/bin/agy; Windows %LOCALAPPDATA%\agy\bin\agy.exe). Reuse an existing working CLI. If missing, install it directly using the official Google command for this OS instead of merely reporting a missing dependency:
    macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
    Windows PowerShell: irm https://antigravity.google/cli/install.ps1 | iex

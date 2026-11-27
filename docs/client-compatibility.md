@@ -7,6 +7,7 @@
 | 客户端 | 官方接入路径 | 当前状态 | 备注 |
 |---|---|---|---|
 | Cursor | 本项目原生 Workbench Adapter | **项目已验证** | V1.2.0；Windows x64 / macOS Apple Silicon；Cursor 3.28.7 |
+| Cursor 3.32.4 | V1.2.1 候选适配层 | 真实资源结构、语法、安装和完整恢复已在双平台验证 | Windows 模型目录 11 系列已加载；原生选择器因测试账号的宿主订阅限制未完成对话；Mac 原生界面待验收 |
 | Zed | agent_servers 注册 agy acp | 官方 ACP 路径 | 无需重复开发协议适配器 |
 | JetBrains IDEs | AI Assistant / ~/.jetbrains/acp.json | 官方 ACP 路径 | 通过 ACP 使用外部 Agent |
 | Android Studio | ACP Registry | 官方 ACP 路径 | 以官方 Registry 指引为准 |

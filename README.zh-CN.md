@@ -26,6 +26,8 @@ Antigravity Agent Bridge 是围绕 Google 官方 Antigravity CLI 和 Agent Clien
 
 当前正式版提供 **Antigravity for Cursor** 原生适配器，Windows 与 macOS 均已实机验收。其他 Agent Harness 将根据其 ACP 支持情况选择直接接入或开发专用适配器。
 
+> **V1.2.1 候选版（尚未正式发布）**：插件管理面板可自动检测官方 CLI；缺失时点击「安装并连接」，已有 CLI 则直接复用。按官方流程登录后启用原生模型，再完全退出并重新打开 Cursor。CLI 从零安装、54 项自动化测试、3.28.7 与 3.32.4 的真实 Workbench 资源安装及完整恢复测试均已通过。Windows 3.28.7 原生 Hydrogen Low 对话通过；Windows 3.32.4 已成功加载全部 11 个模型系列，但测试账号的 Cursor 原生模型选择器受订阅限制，原生对话尚未验收。Mac 3.32.4 原生界面待验收。以下正式版安装链接仍指向 V1.2.0。
+
 ## 下载安装
 
 **V1.2.0 正式版** · Windows x64 / macOS Apple Silicon · 已验证 Cursor 3.28.7、Antigravity CLI 1.5.18
@@ -104,6 +106,8 @@ Cursor 保留可见聊天记录，适配器关联 ACP 会话、同步可见上�
 | --- | --- | --- |
 | Windows x64 + Cursor 3.28.7 | 正式支持，实机验收通过 | 通用 VSIX；受保护目录需要 UAC |
 | macOS Apple Silicon + Cursor 3.28.7 | 正式支持，实机验收通过 | 通用 VSIX；按需授予 App 管理权限 |
+| Windows x64 + Cursor 3.32.4 | V1.2.1 候选：资源恢复及模型目录通过；原生选择受宿主订阅限制 | 暂未完成实机对话 |
+| macOS Apple Silicon + Cursor 3.32.4 | V1.2.1 候选：资源恢复通过 | 原生界面待验收 |
 | Windows ARM64 / Intel Mac / Linux | 暂未实机验证 | 不承诺兼容 |
 | Zed、JetBrains 等 ACP 客户端 | 官方 ACP 直连路径 | 按客户端及 Google 官方文档配置 |
 | 其他非 ACP Agent Harness | 后续适配 | 按宿主 API 与能力评估 |
@@ -206,6 +210,7 @@ cursor --install-extension $file --force
 请帮我在这台电脑安装 Antigravity Agent Bridge 最新稳定正式版：
 https://github.com/rizetngan/antigravity-harness-bridge
 
+0. 确认安装的是正式发布版本，而非未验收候选分支；如果版本支持面板内「安装并连接」，优先使用该流程，不重复安装 CLI。确认 Cursor 账号本身允许使用原生模型选择器；不要绕过宿主订阅限制。
 1. 检查操作系统、CPU 架构、Cursor 与官方 CLI。Antigravity 桌面端不等于 CLI。先检查 PATH，再检查 macOS ~/.local/bin/agy 或 Windows %LOCALAPPDATA%\agy\bin\agy.exe；如果已安装则直接复用，不重复安装。如果缺少 CLI，请直接执行对应系统的 Google 官方安装命令，不要只告诉我缺少依赖：
    macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
    Windows PowerShell: irm https://antigravity.google/cli/install.ps1 | iex
