@@ -26,7 +26,7 @@ Antigravity Agent Bridge is built around Google's official Antigravity CLI and A
 
 The first production adapter is **Antigravity for Cursor**, validated on Windows and macOS. Other agent harnesses can use direct ACP where supported, or dedicated adapters where deeper integration is needed.
 
-> **V1.2.1 candidate (not yet released):** The management panel detects the official CLI and offers Install and Connect when missing; an existing working CLI is reused. Complete official sign-in, enable native models, then fully quit and reopen Cursor. Clean CLI installation, 54 automated tests, and actual Workbench patch/install/byte-exact restore for 3.28.7 and 3.32.4 passed. Windows 3.28.7 native Hydrogen Low chat passed; Windows 3.32.4 loaded all 11 model families, but its test account's native picker is locked by Cursor's subscription requirement, so native chat remains unverified. macOS 3.32.4 live UI acceptance is pending. Stable download links below still point to V1.2.0.
+> **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the candidate gateway passed a real Hydrogen Low request. macOS 3.32.4 passed resource compatibility only; live UI verification is pending. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
 
 ## Download
 
@@ -69,6 +69,8 @@ Daily switching does not restart Cursor or delete existing conversations. If a c
 
 ### Real native Agent conversations
 
+<p align="center"><img src="docs/images/windows-3324-native-continuity.png" width="96%" alt="Windows 3.32.4 native chat continuity after service restart"><br><sub>V1.2.1 / Cursor 3.32.4: actual native conversation, including the follow-up after restarting the service.</sub></p>
+
 <p align="center">
 <img src="docs/images/windows-native-chat.png" width="90%" alt="Real Windows Cursor native chat: Gemini 4 Hydrogen Low returned HYDROGEN_LOW_UI_OK">
 <br><sub>Windows: actual Gemini 4 Hydrogen Low request and response in Cursor.</sub>
@@ -104,9 +106,9 @@ For a client that already supports ACP, prefer Google's direct `agy acp` connect
 | Platform / client | Status | Installation |
 | --- | --- | --- |
 | Windows x64 + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; UAC for protected directories |
-| macOS Apple Silicon + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; App Management authorization as needed |
-| Windows x64 + Cursor 3.32.4 | V1.2.1 candidate: resources and catalogue verified; host subscription gates native picker | Native chat pending |
-| macOS Apple Silicon + Cursor 3.32.4 | V1.2.1 candidate: resources and exact restore verified | Live UI pending |
+| macOS Apple Silicon + Cursor 3.28.7 | V1.2.0 native UI verified; V1.2.1 gateway and resource regression passed | Shared VSIX; App Management authorization as needed |
+| Windows x64 + Cursor 3.32.4 | Live native picker, chat, switching and context continuity passed | Shared VSIX |
+| macOS Apple Silicon + Cursor 3.32.4 | Resource compatibility and exact restore passed | Live UI pending |
 | Windows ARM64 / Intel Mac / Linux | Not live-tested | Compatibility not established |
 | Zed, JetBrains and other ACP clients | Official direct ACP path | Follow client-specific Google documentation |
 | Other non-ACP agent harnesses | Future adapters | Host-specific validation required |
@@ -114,6 +116,8 @@ For a client that already supports ACP, prefer Google's direct `agy acp` connect
 Cursor integration depends on version-specific Workbench resources. Recheck compatibility when Cursor updates. [Client compatibility matrix](docs/client-compatibility.md)
 
 ## Installation
+
+**Quick setup (V1.2.1):** Install the VSIX → open the Antigravity management panel → choose Install and Connect if the CLI is missing (existing CLI is reused) → complete official sign-in if requested → Enable Native Models → fully quit and reopen Cursor → Start Service. The terminal steps below are an alternative.
 
 ### Step 1: Detect and install the official CLI if needed
 
@@ -142,7 +146,7 @@ $ErrorActionPreference = 'Stop'
 $agy = Get-Command agy.exe -ErrorAction SilentlyContinue
 $agyPath = if ($agy) { $agy.Source } else { Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe' }
 if (-not (Test-Path $agyPath)) {
-    irm https://antigravity.google/cli/install.ps1 | iex
+    & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1'))) --skip-path --skip-aliases
     $agyPath = Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe'
 }
 & $agyPath --version
@@ -209,10 +213,10 @@ Copy this prompt into an agent with access to the local computer, such as ChatGP
 Install the latest stable Antigravity Agent Bridge on this computer:
 https://github.com/rizetngan/antigravity-harness-bridge
 
-0. Use a stable release, not an unvalidated candidate. When the version provides Install and Connect in the panel, prefer it and reuse any working CLI. Verify that the Cursor account can access its native model picker; do not bypass host subscription checks.
+0. Choose a stable release and a verified host version from the compatibility matrix. Reuse a working CLI, and prefer Install and Connect when available. Antigravity execution uses the Antigravity account. Report any host picker restriction separately, without modifying its permission checks.
 1. Check OS, architecture, Cursor and CLI. The Antigravity desktop app is not the CLI. Check PATH and the official default locations (macOS ~/.local/bin/agy; Windows %LOCALAPPDATA%\agy\bin\agy.exe). Reuse an existing working CLI. If missing, install it directly using the official Google command for this OS instead of merely reporting a missing dependency:
    macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
-   Windows PowerShell: irm https://antigravity.google/cli/install.ps1 | iex
+   Windows PowerShell: & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1'))) --skip-path --skip-aliases
    Verify agy --version and agy acp --help using the actual executable path, even if PATH has not refreshed. Report any actual installation or compatibility failure; let me complete official sign-in if required.
 2. Download the latest stable VSIX only from this repository's GitHub Releases and verify its published SHA-256. Stop if the checksum does not match.
 3. Check for an existing Workbench integration. Restore the previous integration before upgrading; preserve conversations and settings. Do not interrupt an active task.

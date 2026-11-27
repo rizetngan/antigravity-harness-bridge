@@ -26,7 +26,7 @@ Antigravity Agent Bridge 是围绕 Google 官方 Antigravity CLI 和 Agent Clien
 
 当前正式版提供 **Antigravity for Cursor** 原生适配器，Windows 与 macOS 均已实机验收。其他 Agent Harness 将根据其 ACP 支持情况选择直接接入或开发专用适配器。
 
-> **V1.2.1 候选版（尚未正式发布）**：插件管理面板可自动检测官方 CLI；缺失时点击「安装并连接」，已有 CLI 则直接复用。按官方流程登录后启用原生模型，再完全退出并重新打开 Cursor。CLI 从零安装、54 项自动化测试、3.28.7 与 3.32.4 的真实 Workbench 资源安装及完整恢复测试均已通过。Windows 3.28.7 原生 Hydrogen Low 对话通过；Windows 3.32.4 已成功加载全部 11 个模型系列，但测试账号的 Cursor 原生模型选择器受订阅限制，原生对话尚未验收。Mac 3.32.4 原生界面待验收。以下正式版安装链接仍指向 V1.2.0。
+> **V1.2.1 验收结果：** Windows x64 的 Cursor 3.28.7、3.32.4 原生模型选择、Hydrogen Low 真实对话与启停已通过。双平台 CLI 从零安装、54 项自动化测试及真实资源补丁与恢复均通过。macOS 3.28.7 延续已实机验证的原生适配器，本候选版网关也通过真实 Hydrogen Low 调用；macOS 3.32.4 目前仅通过资源兼容验证，原生界面待实测。模型执行使用 Antigravity 账号，保留宿主原生选择器的权限策略。
 
 ## 下载安装
 
@@ -69,6 +69,8 @@ SHA-256（V1.2.0 VSIX）：
 
 ### 3. 真实 Agent 对话，而非独立聊天框
 
+<p align="center"><img src="docs/images/windows-3324-native-continuity.png" width="96%" alt="Windows 3.32.4 原生会话启停后仍可连续对话"><br><sub>V1.2.1 / Cursor 3.32.4 实机：两轮回复与会话连续性。</sub></p>
+
 <p align="center">
 <img src="docs/images/windows-native-chat.png" width="90%" alt="Windows Cursor 原生聊天：Gemini 4 Hydrogen Low 返回 HYDROGEN_LOW_UI_OK">
 <br><sub>Windows 实机：Gemini 4 Hydrogen Low 真实请求与原生聊天结果</sub>
@@ -105,9 +107,9 @@ Cursor 保留可见聊天记录，适配器关联 ACP 会话、同步可见上�
 | 平台 / 客户端 | 状态 | 安装方式 |
 | --- | --- | --- |
 | Windows x64 + Cursor 3.28.7 | 正式支持，实机验收通过 | 通用 VSIX；受保护目录需要 UAC |
-| macOS Apple Silicon + Cursor 3.28.7 | 正式支持，实机验收通过 | 通用 VSIX；按需授予 App 管理权限 |
-| Windows x64 + Cursor 3.32.4 | V1.2.1 候选：资源恢复及模型目录通过；原生选择受宿主订阅限制 | 暂未完成实机对话 |
-| macOS Apple Silicon + Cursor 3.32.4 | V1.2.1 候选：资源恢复通过 | 原生界面待验收 |
+| macOS Apple Silicon + Cursor 3.28.7 | V1.2.0 原生实测；V1.2.1 网关与资源回归通过 | 通用 VSIX；按需授予 App 管理权限 |
+| Windows x64 + Cursor 3.32.4 | 原生模型选择、真实对话、启停及上下文连续性通过 | 通用 VSIX |
+| macOS Apple Silicon + Cursor 3.32.4 | 资源兼容与完整恢复通过 | 原生界面待实测 |
 | Windows ARM64 / Intel Mac / Linux | 暂未实机验证 | 不承诺兼容 |
 | Zed、JetBrains 等 ACP 客户端 | 官方 ACP 直连路径 | 按客户端及 Google 官方文档配置 |
 | 其他非 ACP Agent Harness | 后续适配 | 按宿主 API 与能力评估 |
@@ -115,6 +117,8 @@ Cursor 保留可见聊天记录，适配器关联 ACP 会话、同步可见上�
 Cursor 原生适配器涉及版本特定的 Workbench 接入。升级 Cursor 后应重新检查兼容性，不应强行应用不匹配的补丁。[完整客户端兼容说明](docs/client-compatibility.md)
 
 ## 使用方法
+
+**图形化快速安装（V1.2.1）：** 安装 VSIX → 打开 Antigravity 管理面板 → 缺少 CLI 时点击「安装并连接」，已有 CLI 自动识别 → 按需登录官方账号 → 启用原生模型 → 完全退出并重新打开 Cursor → 启动服务。下方命令行方式可用于提前安装依赖。
 
 ### 第一步：检测并补齐官方 CLI
 
@@ -143,7 +147,7 @@ $ErrorActionPreference = 'Stop'
 $agy = Get-Command agy.exe -ErrorAction SilentlyContinue
 $agyPath = if ($agy) { $agy.Source } else { Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe' }
 if (-not (Test-Path $agyPath)) {
-    irm https://antigravity.google/cli/install.ps1 | iex
+    & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1'))) --skip-path --skip-aliases
     $agyPath = Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe'
 }
 & $agyPath --version
@@ -210,10 +214,10 @@ cursor --install-extension $file --force
 请帮我在这台电脑安装 Antigravity Agent Bridge 最新稳定正式版：
 https://github.com/rizetngan/antigravity-harness-bridge
 
-0. 确认安装的是正式发布版本，而非未验收候选分支；如果版本支持面板内「安装并连接」，优先使用该流程，不重复安装 CLI。确认 Cursor 账号本身允许使用原生模型选择器；不要绕过宿主订阅限制。
+0. 选择正式发布且在兼容矩阵内已验证的版本。已有 CLI 直接复用；支持面板内「安装并连接」的版本优先使用该流程。Antigravity 执行使用 Antigravity 账号；宿主模型选择器的限制单独报告，不修改权限判断。
 1. 检查操作系统、CPU 架构、Cursor 与官方 CLI。Antigravity 桌面端不等于 CLI。先检查 PATH，再检查 macOS ~/.local/bin/agy 或 Windows %LOCALAPPDATA%\agy\bin\agy.exe；如果已安装则直接复用，不重复安装。如果缺少 CLI，请直接执行对应系统的 Google 官方安装命令，不要只告诉我缺少依赖：
    macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
-   Windows PowerShell: irm https://antigravity.google/cli/install.ps1 | iex
+   Windows PowerShell: & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1'))) --skip-path --skip-aliases
    安装后通过实际绝对路径验证 agy --version 和 agy acp --help；如果 PATH 未刷新，不要误判为安装失败。若仍缺少、ACP 不可用或版本超出已验证范围，说明具体原因；需要登录时由我完成官方认证。
 2. 从本仓库 GitHub Releases 选择最新稳定版 VSIX，使用该版本公布的 SHA-256 校验文件；不一致则停止。
 3. 检查是否存在旧版 Workbench 接入。如需升级，先通过旧版 Restore Cursor 恢复；保留聊天记录和已有设置，不强制终止正在执行的任务。

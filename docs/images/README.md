@@ -23,3 +23,5 @@ The following screenshots were captured from the actual Cursor 3.28.7 UI running
 | `windows-native-chat.png` | Original Windows x64 Cursor window; assistant returned `HYDROGEN_LOW_UI_OK`. |
 
 Actual model availability and appearance may change with the account, Cursor version and theme. The management panel uses its current Chinese UI labels.
+
+- `windows-3324-native-continuity.png`: V1.2.1 candidate, Cursor 3.32.4 on Windows x64. Actual native conversation after stopping and restarting the service, with Hydrogen Low selected and an exact-token context follow-up. No mockup.
