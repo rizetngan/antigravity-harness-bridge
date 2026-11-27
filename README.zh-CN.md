@@ -34,7 +34,7 @@ Antigravity Agent Bridge 是围绕 Google 官方 Antigravity CLI 和 Agent Clien
 
 **[下载 VSIX（双平台通用）](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.1/antigravity-cursor-1.2.1.vsix)** · [发布说明](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.1) · [全部版本](https://github.com/rizetngan/antigravity-harness-bridge/releases)
 
-SHA-256（V1.2.0 VSIX）：
+SHA-256（V1.2.1 VSIX）：
 
 ```text
 f7954b3af7282b3194f105017d16eaf8610e28d9d47a4a35550081a011e65768
