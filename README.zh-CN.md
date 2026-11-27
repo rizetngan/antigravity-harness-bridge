@@ -26,7 +26,7 @@ Antigravity Agent Bridge 是围绕 Google 官方 Antigravity CLI 和 Agent Clien
 
 当前正式版提供 **Antigravity for Cursor** 原生适配器，Windows 与 macOS 均已实机验收。其他 Agent Harness 将根据其 ACP 支持情况选择直接接入或开发专用适配器。
 
-> **V1.2.1 验收结果：** Windows x64 的 Cursor 3.28.7、3.32.4 原生模型选择、Hydrogen Low 真实对话与启停已通过。双平台 CLI 从零安装、54 项自动化测试及真实资源补丁与恢复均通过。macOS 3.28.7 延续已实机验证的原生适配器，V1.2.1 网关也通过真实 Hydrogen Low 调用；macOS 3.32.4 目前仅通过资源兼容验证，原生界面待实测。模型执行使用 Antigravity 账号，保留宿主原生选择器的权限策略。
+> **V1.2.1 验收结果：** Windows x64 的 Cursor 3.28.7、3.32.4 原生模型选择、Hydrogen Low 真实对话与启停已通过。双平台 CLI 从零安装、54 项自动化测试及真实资源补丁与恢复均通过。macOS 3.28.7 延续已实机验证的原生适配器，V1.2.1 网关也通过真实 Hydrogen Low 调用；macOS 3.32.4 使用正式发行 VSIX，已通过 Hydrogen Low 原生真实对话、启停与同会话上下文连续性验收。模型执行使用 Antigravity 账号，保留宿主原生选择器的权限策略。
 
 ## 下载安装
 
@@ -109,7 +109,7 @@ Cursor 保留可见聊天记录，适配器关联 ACP 会话、同步可见上�
 | Windows x64 + Cursor 3.28.7 | 正式支持，实机验收通过 | 通用 VSIX；受保护目录需要 UAC |
 | macOS Apple Silicon + Cursor 3.28.7 | V1.2.0 原生实测；V1.2.1 网关与资源回归通过 | 通用 VSIX；按需授予 App 管理权限 |
 | Windows x64 + Cursor 3.32.4 | 原生模型选择、真实对话、启停及上下文连续性通过 | 通用 VSIX |
-| macOS Apple Silicon + Cursor 3.32.4 | 资源兼容与完整恢复通过 | 原生界面待实测 |
+| macOS Apple Silicon + Cursor 3.32.4 | 原生真实对话、启停、上下文连续性及资源恢复通过 | 通用 VSIX |
 | Windows ARM64 / Intel Mac / Linux | 暂未实机验证 | 不承诺兼容 |
 | Zed、JetBrains 等 ACP 客户端 | 官方 ACP 直连路径 | 按客户端及 Google 官方文档配置 |
 | 其他非 ACP Agent Harness | 后续适配 | 按宿主 API 与能力评估 |

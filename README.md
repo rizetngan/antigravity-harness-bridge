@@ -26,7 +26,7 @@ Antigravity Agent Bridge is built around Google's official Antigravity CLI and A
 
 The first production adapter is **Antigravity for Cursor**, validated on Windows and macOS. Other agent harnesses can use direct ACP where supported, or dedicated adapters where deeper integration is needed.
 
-> **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the V1.2.1 gateway passed a real Hydrogen Low request. macOS 3.32.4 passed resource compatibility only; live UI verification is pending. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
+> **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the V1.2.1 gateway passed a real Hydrogen Low request. macOS 3.32.4 also passed native Hydrogen Low chat, service stop/start and same-conversation context continuity using the released VSIX. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
 
 ## Download
 
@@ -108,7 +108,7 @@ For a client that already supports ACP, prefer Google's direct `agy acp` connect
 | Windows x64 + Cursor 3.28.7 | Stable, live-tested | Shared VSIX; UAC for protected directories |
 | macOS Apple Silicon + Cursor 3.28.7 | V1.2.0 native UI verified; V1.2.1 gateway and resource regression passed | Shared VSIX; App Management authorization as needed |
 | Windows x64 + Cursor 3.32.4 | Live native picker, chat, switching and context continuity passed | Shared VSIX |
-| macOS Apple Silicon + Cursor 3.32.4 | Resource compatibility and exact restore passed | Live UI pending |
+| macOS Apple Silicon + Cursor 3.32.4 | Live native chat, switching and context continuity passed; resource compatibility and exact restore passed | Shared VSIX |
 | Windows ARM64 / Intel Mac / Linux | Not live-tested | Compatibility not established |
 | Zed, JetBrains and other ACP clients | Official direct ACP path | Follow client-specific Google documentation |
 | Other non-ACP agent harnesses | Future adapters | Host-specific validation required |

@@ -8,7 +8,7 @@
 |---|---|---|---|
 | Cursor | 本项目原生 Workbench Adapter | **项目已验证** | V1.2.0；Windows x64 / macOS Apple Silicon；Cursor 3.28.7 |
 | Cursor 3.32.4（Windows x64） | V1.2.1 原生适配层 | **实机验收通过** | 11 系列 / 27 变体；Hydrogen Low 真实原生对话、停止恢复、重启及同会话连续性通过 |
-| Cursor 3.32.4（macOS Apple Silicon） | V1.2.1 原生适配层 | 真实资源与恢复验证通过 | 原生界面待实测 |
+| Cursor 3.32.4（macOS Apple Silicon） | V1.2.1 原生适配层 | **实机验收通过** | 11 系列 / 27 变体；Hydrogen Low 原生对话、启停、参数恢复、同会话连续性及真实资源恢复通过 |
 | Zed | agent_servers 注册 agy acp | 官方 ACP 路径 | 无需重复开发协议适配器 |
 | JetBrains IDEs | AI Assistant / ~/.jetbrains/acp.json | 官方 ACP 路径 | 通过 ACP 使用外部 Agent |
 | Android Studio | ACP Registry | 官方 ACP 路径 | 以官方 Registry 指引为准 |

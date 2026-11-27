@@ -11,7 +11,7 @@
 - Preserve the V1.2.0 renderer, provider switching and model routing.
 - Multi-version compatibility: discover the model availability guard through stable native properties and local bindings rather than minified identifiers. Require every native picker/Agent seam before modifying resources and report missing or ambiguous seams.
 - Add a read-only-source compatibility matrix probe for syntax, patch installation and byte-exact restore on isolated resource copies.
-- Validation: 54 tests per platform; clean CLI installation and real-resource syntax, install and exact restore checks passed on both platforms for Cursor 3.28.7 and 3.32.4. Windows 3.32.4 native Hydrogen Low chat passed, including Stop/Start and same-conversation follow-up. macOS V1.2.1 gateway returned MAC_V121_GATEWAY_OK; its 3.32.4 live UI remains unverified. Model execution uses the official Antigravity account; host picker policy is unchanged.
+- Validation: 54 tests per platform; clean CLI installation and real-resource syntax, install and exact restore checks passed on both platforms for Cursor 3.28.7 and 3.32.4. Windows 3.32.4 native Hydrogen Low chat passed, including Stop/Start and same-conversation follow-up. macOS V1.2.1 gateway returned MAC_V121_GATEWAY_OK; macOS 3.32.4 also passed live native Hydrogen Low chat, Stop/Start, model and effort recovery, and same-conversation follow-up using the released VSIX. Model execution uses the official Antigravity account; host picker policy is unchanged.
 
 ## 1.2.0 — Windows + macOS
 
