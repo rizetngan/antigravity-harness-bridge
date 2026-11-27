@@ -3,6 +3,7 @@ import type { ClientApp } from "@agentclientprotocol/sdk";
 import { FileSystemHandler } from "./handlers/FileSystemHandler.js";
 import { PermissionHandler } from "./handlers/PermissionHandler.js";
 import { TerminalHandler } from "./handlers/TerminalHandler.js";
+import { sessionToolRoots } from "../gateway/workspacePolicy.js";
 
 export class AcpClientHandlers {
   private readonly sessionRoots = new Map<string, string[]>();
@@ -37,9 +38,8 @@ export class AcpClientHandlers {
     );
   }
 
-  registerSession(sessionId: string, cwd: string): void {
-    const workspaceRoots = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
-    this.sessionRoots.set(sessionId, [...new Set([cwd, ...workspaceRoots])]);
+  registerSession(sessionId: string, cwd: string, toolsEnabled = true): void {
+    this.sessionRoots.set(sessionId, sessionToolRoots(cwd, vscode.workspace.workspaceFolders, toolsEnabled));
   }
 
   unregisterSession(sessionId: string): void {

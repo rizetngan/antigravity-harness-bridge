@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectCli, ensureCli, officialInstaller, buildLoginCommand } from "../src/cliSetup.ts";
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { inspectCli, ensureCli, officialInstaller, buildLoginCommand, acquireCliInstallLock } from "../src/cliSetup.ts";
 test("working CLI verifies version and ACP without installation",async()=>{
  const calls=[];const r=await inspectCli(()=>"/test/agy",async(file,args)=>{calls.push([file,args]);return "1.5.18"},false);
  assert.equal(r.status,"ready");assert.deepEqual(calls,[["/test/agy",["--version"]],["/test/agy",["acp","--help"]]]);
@@ -36,4 +39,23 @@ test("official login command is correctly quoted and closes only on success",()=
  assert.match(win,/acp --login/);assert.match(win,/LASTEXITCODE -eq 0/);
  const mac=buildLoginCommand("/Users/O'Brien/.local/bin/agy","darwin");
  assert.equal(mac,"'/Users/O'\\''Brien/.local/bin/agy' acp --login && exit");
+});
+
+test("CLI version metadata failure does not block a working ACP command",async()=>{
+ const status=await inspectCli(()=>"/test/agy",async(_f,args)=>{if(args[0]==="--version")throw Error("Version output unavailable");return "ACP help"},false);
+ assert.equal(status.status,"ready");assert.equal(status.version,undefined);
+});
+test("installer rejects a live lock but recovers stale directories and legacy files",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"agy-install-lock-"));const marker=join(root,"cli-install.lock");
+ try {
+  const release=await acquireCliInstallLock(root);
+  await assert.rejects(acquireCliInstallLock(root),/already being held/);
+  await release();assert.equal(existsSync(marker),false);
+  const old=new Date(Date.now()-20*60_000);
+  mkdirSync(marker);utimesSync(marker,old,old);
+  const recovered=await acquireCliInstallLock(root);await recovered();
+  writeFileSync(marker,"");await assert.rejects(acquireCliInstallLock(root));
+  utimesSync(marker,old,old);const legacy=await acquireCliInstallLock(root);await legacy();
+  assert.equal(existsSync(marker),false);
+ }finally{rmSync(root,{recursive:true,force:true});}
 });

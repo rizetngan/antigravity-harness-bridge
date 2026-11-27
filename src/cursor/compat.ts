@@ -97,6 +97,10 @@ export interface CompatibilityPlan {
   patchedProductHash: string;
 }
 
+export function hasBridgeMarkers(source: string): boolean {
+  return source.includes(START) || source.includes(END) || source.includes("__antigravityBridge") || /\/\* ANTIGRAVITY_[A-Z_]+ \*\//.test(source);
+}
+
 export function digest(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -167,15 +171,22 @@ const FULL_NATIVE_ANCHORS = new Set(["turn_strategy", "type_AgentServerMessage",
 
 export function nativeCompatibility(source: string): ReturnType<typeof anchorCounts> {
   const result = anchorCounts(source);
+  // A retired UI surface need not be patched. An existing but unrecognized
+  // surface is still a mismatch; never relax the native turn or picker route.
+  const end = result.adapter ? source.indexOf(END) + END.length : 0;
+  const body = source.slice(end);
+  const retired = new Set<string>();
+  if (!body.includes("getAvailableModelsReactiveWithStatus") && !body.includes("_setUseOpenAIKey") && !body.includes(LEGACY_PICKER_MARK)) retired.add("provider_legacy");
+  if (!body.includes("getHardcodedLongContextOnlyModelNames") && !body.includes(SETTINGS_PICKER_MARK)) retired.add("provider_settings");
   for (const id of FULL_NATIVE_ANCHORS) {
     if (!result.anchors.some(a => a.id === id)) result.anchors.push({ id, count: 0, patched: 0, required: true, ok: false });
   }
   for (const a of result.anchors) {
     if (FULL_NATIVE_ANCHORS.has(a.id)) {
-      a.required = true;
-      a.ok = a.count + a.patched === 1;
+      a.required = !retired.has(a.id);
+      a.ok = a.required ? a.count + a.patched === 1 : a.count + a.patched <= 1;
     }
-    if (result.adapter && (FULL_NATIVE_ANCHORS.has(a.id) || a.id === "model_getter" || a.id === "client_factory") && !a.id.startsWith("type_")) {
+    if (result.adapter && (a.required && FULL_NATIVE_ANCHORS.has(a.id) || a.id === "model_getter" || a.id === "client_factory") && !a.id.startsWith("type_")) {
       a.ok = a.ok && a.patched === 1 && a.count === 0;
     }
   }
@@ -301,6 +312,15 @@ export class CursorCompatibility {
     return result;
   }
 
+  // Restoration only needs to know whether our own modifications remain.
+  // Do not require a newer, unmodified host to match the current adapter.
+  async hasInstalledMarkers(): Promise<boolean> {
+    for (const target of this.targets) {
+      if (hasBridgeMarkers(await fs.readFile(target.path, "utf8"))) return true;
+    }
+    return false;
+  }
+
   async plan(config: { url: string; token: string }): Promise<CompatibilityPlan> {
     if (!this.targets.some(target => target.kind === "desktop")) throw new Error("Cursor desktop Workbench is missing.");
     const renderer = await fs.readFile(this.rendererPath, "utf8");
@@ -371,7 +391,7 @@ export class CursorCompatibility {
       throw new Error("Cursor product.json changed after the compatibility check.");
     }
 
-    const backup = path.join(this.storagePath, "backups", plan.targets[0].originalHash);
+    const backup = path.join(this.storagePath, "backups", digest(JSON.stringify([plan.productHash, ...plan.targets.map(t => [t.key, t.originalHash])])));
     await fs.mkdir(backup, { recursive: true });
     for (const target of plan.targets) {
       await writeBackup(path.join(backup, target.backup), Buffer.from(target.source), target.originalHash);
@@ -421,7 +441,13 @@ export class CursorCompatibility {
 
   async restore(): Promise<boolean> {
     const journalPath = path.join(this.storagePath, "compatibility.json");
-    const journal = JSON.parse(await fs.readFile(journalPath, "utf8")) as {
+    let raw: string;
+    try { raw = await fs.readFile(journalPath, "utf8"); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT" && !(await this.hasInstalledMarkers())) return false;
+      throw error;
+    }
+    const journal = JSON.parse(raw) as {
       appRoot: string;
       backup: string;
       targets: Array<{ file: string; backupFile: string; originalHash: string; patchedHash: string }>;
@@ -432,10 +458,12 @@ export class CursorCompatibility {
     if (!samePath(journal.appRoot, this.appRoot)) {
       throw new Error("The compatibility backup belongs to a different Cursor installation.");
     }
-    await this.restoreFromJournal(journal);
-    journal.state = "restored";
-    await atomicWrite(journalPath, Buffer.from(JSON.stringify(journal, null, 2)));
-    return true;
+    const changed = await this.restoreFromJournal(journal);
+    if (journal.state !== "restored") {
+      journal.state = "restored";
+      await atomicWrite(journalPath, Buffer.from(JSON.stringify(journal, null, 2)));
+    }
+    return changed;
   }
 
   private async restoreFromJournal(journal: {
@@ -443,29 +471,71 @@ export class CursorCompatibility {
     targets: Array<{ file: string; backupFile: string; originalHash: string; patchedHash: string }>;
     productHash: string;
     patchedProductHash: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
+    const changes: Array<{ file: string; before: string; bytes: Buffer }> = [];
+    const currentTargets: Array<{ key: string; patchedHash: string; originalHash: string; finalHash: string; restore: boolean }> = [];
+    // Preflight every affected file before writing any of them. A clean host
+    // update is not a conflict; an unknown file still containing our patch is.
     for (const target of journal.targets) {
-      const current = await fs.readFile(target.file);
+      const spec = TARGET_SPECS.find(item => samePath(path.join(this.appRoot, "out", "vs", "workbench", item.file), target.file));
+      if (!spec || target.backupFile !== spec.backup) throw new Error("Unexpected recovery target.");
+      const current = await fs.readFile(target.file).catch(error => {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT" && spec.kind !== "desktop") return undefined;
+        throw error;
+      });
+      if (!current) continue; // newer Cursor may no longer ship Glass
       const currentHash = digest(current);
-      if (currentHash === target.originalHash) continue;
-      if (currentHash !== target.patchedHash) {
-        throw new Error("Cursor Workbench changed after installation; refusing to overwrite unknown changes.");
+      if (currentHash === target.originalHash || (currentHash !== target.patchedHash && !hasBridgeMarkers(current.toString("utf8")))) {
+        currentTargets.push({ key: spec.key, patchedHash: target.patchedHash, originalHash: target.originalHash, finalHash: currentHash, restore: false });
+        continue;
       }
+      if (currentHash !== target.patchedHash) throw new Error("Cursor Workbench changed with the bridge still present; refusing to overwrite unknown changes.");
       const original = await fs.readFile(path.join(journal.backup, target.backupFile));
       if (digest(original) !== target.originalHash) throw new Error("Original Workbench backup hash mismatch.");
-      await atomicWrite(target.file, original);
+      changes.push({ file: target.file, before: currentHash, bytes: original });
+      currentTargets.push({ key: spec.key, patchedHash: target.patchedHash, originalHash: target.originalHash, finalHash: target.originalHash, restore: true });
     }
 
     const currentProduct = await fs.readFile(this.productPath);
     const currentProductHash = digest(currentProduct);
     if (currentProductHash !== journal.productHash) {
-      if (currentProductHash !== journal.patchedProductHash) {
-        throw new Error("Cursor product.json changed after installation; refusing to overwrite unknown changes.");
+      const product = JSON.parse(currentProduct.toString("utf8")) as { checksums?: Record<string, string> };
+      const encodeHash = (hash: string) => Buffer.from(hash, "hex").toString("base64").replace(/=+$/, "");
+      const affected = currentTargets.filter(t => t.restore || product.checksums?.[t.key] === encodeHash(t.patchedHash));
+      if (affected.length) {
+        const original = await fs.readFile(path.join(journal.backup, "product.original.json"));
+        if (digest(original) !== journal.productHash) throw new Error("Original product.json backup hash mismatch.");
+        const originalProduct = JSON.parse(original.toString("utf8")) as { checksums?: Record<string, string> };
+        if (currentProductHash === journal.patchedProductHash && currentTargets.length === journal.targets.length && currentTargets.every(t => t.finalHash === t.originalHash)) {
+          changes.push({ file: this.productPath, before: currentProductHash, bytes: original });
+        } else {
+          let changed = false;
+          for (const t of affected) {
+            const checksums = product.checksums;
+            if (!checksums || !Object.hasOwn(checksums, t.key)) continue;
+            const current = checksums[t.key];
+            const previous = originalProduct.checksums?.[t.key];
+            const patched = encodeHash(t.patchedHash);
+            if (t.restore && current !== patched && current !== previous) throw new Error("Cursor checksum changed for a Workbench that still contains the bridge.");
+            if (current !== patched) continue;
+            if (t.finalHash !== t.originalHash) throw new Error("Changed Workbench still has the old bridge checksum. Complete the Cursor update or repair first.");
+            if (previous === undefined) delete checksums[t.key];
+            else checksums[t.key] = previous;
+            changed = true;
+          }
+          if (changed) changes.push({ file: this.productPath, before: currentProductHash, bytes: Buffer.from(JSON.stringify(product, null, "\t")) });
+        }
       }
-      const original = await fs.readFile(path.join(journal.backup, "product.original.json"));
-      if (digest(original) !== journal.productHash) throw new Error("Original product.json backup hash mismatch.");
-      await atomicWrite(this.productPath, original);
     }
+    // Recheck only files we will change, to avoid racing the host updater.
+    for (const change of changes) {
+      if (digest(await fs.readFile(change.file)) !== change.before) throw new Error("Cursor changed during recovery. Retry after the update completes.");
+    }
+    for (const change of changes) {
+      await atomicWrite(change.file, change.bytes);
+      if (digest(await fs.readFile(change.file)) !== digest(change.bytes)) throw new Error("Cursor recovery write could not be verified.");
+    }
+    return changes.length > 0;
   }
 
   private isDailyCursorApp(): boolean {

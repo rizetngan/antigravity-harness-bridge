@@ -42,9 +42,9 @@ $("dot").className="dot "+dot;$("status").textContent=label;$("detail").textCont
 main=action;$("mainAction").hidden=!action;$("mainAction").textContent=actionText;$("mainAction").disabled=busy;$("checkCli").hidden=s.cli.status!=="missing"||reload||!["disabled","enabled"].includes(s.patch);$("checkCli").disabled=busy;
 $("switch").hidden=!enabled||reload;$("switch").disabled=busy||active||(!running&&s.cli.status!=="ready");$("switch").setAttribute("aria-checked",String(running));
 $("account").textContent=s.connected?"已连接":s.connecting?"连接中":s.error==="login"?"需要登录":"未连接";
-$("login").disabled=busy||s.cli.status!=="ready"||(!enabled&&s.patch!=="disabled")||(enabled&&!running)||reload||active;
-$("refresh").disabled=busy||s.cli.status!=="ready"||!enabled||!running||reload||s.connecting;
-$("restore").disabled=busy||reload||active||!owner||!["enabled","partial","unsupported"].includes(s.patch);
+$("login").disabled=busy||s.cli.status!=="ready"||s.patch==="checking"||reload||active;
+$("refresh").disabled=busy||!enabled||!running||reload||s.connecting;
+$("restore").disabled=busy||reload||active||!["enabled","partial","unsupported"].includes(s.patch);
 $("logs").disabled=busy;$("count").textContent=s.models.length?String(s.models.length):"";
 const list=$("models");const fragment=document.createDocumentFragment();for(const model of s.models){const row=document.createElement("div");row.className="model";const name=document.createElement("span");name.className="name grow";name.textContent=model.name;row.append(name);if(model.efforts.length){const effort=document.createElement("span");effort.className="effort";effort.textContent=model.efforts.length+" 档";effort.title=model.efforts.map(x=>labels[x]||x).join(" · ");row.append(effort)}fragment.append(row)}
 if(!s.models.length){const empty=document.createElement("div");empty.className="empty";empty.textContent=s.connecting?"正在加载…":"连接后加载模型";fragment.append(empty)}list.replaceChildren(fragment);

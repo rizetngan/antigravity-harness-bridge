@@ -206,3 +206,92 @@ test("wraps the managed Agent Host per-turn execution strategy on both Workbench
     assert.throws(() => patchSource(input + strategy, renderer, { url: "http://127.0.0.1", token: "test-token" }), /strategy is ambiguous/);
   }
 });
+
+async function recoveryFixture(run) {
+  const root = mkdtempSync(join(tmpdir(), "antigravity-resilience-"));
+  try {
+    const appRoot = join(root, "Cursor-Antigravity-Test", "resources", "app");
+    const dir = join(appRoot, "out", "vs", "workbench");
+    const desktop = join(dir, "workbench.desktop.main.js"), glass = join(dir, "workbench.glass.main.js");
+    const product = join(appRoot, "product.json"), storage = join(root, "storage"), rendererPath = join(root, "renderer.js");
+    const originalProduct = {version:"1",checksums:{"vs/workbench/workbench.desktop.main.js":"desktop-original","vs/workbench/workbench.glass.main.js":"glass-original","other":"other-original"}};
+    mkdirSync(dir,{recursive:true});
+    writeFileSync(desktop,source);writeFileSync(glass,source);writeFileSync(rendererPath,renderer);writeFileSync(product,JSON.stringify(originalProduct));
+    const compat = new CursorCompatibility(appRoot,storage,rendererPath,{syntheticFixture:true});
+    const plan = await compat.plan({url:"http://127.0.0.1:28743",token:"test-token"});
+    await compat.install(plan);
+    await run({compat,plan,desktop,glass,product,storage,originalProduct});
+  } finally {rmSync(root,{recursive:true,force:true});}
+}
+
+test("restore preserves unrelated product.json changes and only reverts bridge checksums",async()=>{
+ await recoveryFixture(async({compat,desktop,glass,product,originalProduct})=>{
+   const current=JSON.parse(readFileSync(product,"utf8"));current.unrelated={new:true};current.checksums.other="other-new";writeFileSync(product,JSON.stringify(current,null,2));
+   await compat.restore();
+   assert.equal(readFileSync(desktop,"utf8"),source);assert.equal(readFileSync(glass,"utf8"),source);
+   const result=JSON.parse(readFileSync(product,"utf8"));
+   assert.deepEqual(result.unrelated,{new:true});assert.equal(result.checksums.other,"other-new");
+   assert.equal(result.checksums["vs/workbench/workbench.desktop.main.js"],originalProduct.checksums["vs/workbench/workbench.desktop.main.js"]);
+ });
+});
+
+test("a clean Cursor upgrade never gets replaced by older backup files",async()=>{
+ await recoveryFixture(async({compat,desktop,glass,product})=>{
+   const updated="new Cursor build with different native structures";
+   const metadata=JSON.stringify({version:"2",checksums:{other:"new"}},null,2);
+   writeFileSync(desktop,updated);writeFileSync(glass,updated);writeFileSync(product,metadata);
+   await compat.restore();
+   assert.equal(readFileSync(desktop,"utf8"),updated);assert.equal(readFileSync(glass,"utf8"),updated);assert.equal(readFileSync(product,"utf8"),metadata);
+   assert.equal(await compat.hasInstalledMarkers(),false);
+ });
+});
+
+test("unknown edits to a still-patched file are detected before any other file is restored",async()=>{
+ await recoveryFixture(async({compat,desktop,glass,product})=>{
+   const desktopBefore=readFileSync(desktop,"utf8"), productBefore=readFileSync(product,"utf8");
+   const conflict=readFileSync(glass,"utf8")+"\n// unknown change";
+   writeFileSync(glass,conflict);
+   await assert.rejects(compat.restore(),/bridge still present/);
+   assert.equal(readFileSync(desktop,"utf8"),desktopBefore);assert.equal(readFileSync(glass,"utf8"),conflict);assert.equal(readFileSync(product,"utf8"),productBefore);
+ });
+});
+
+test("a missing recovery record is only a no-op if the bridge is absent",async()=>{
+ await recoveryFixture(async({compat,desktop,glass,storage})=>{
+   rmSync(join(storage,"compatibility.json"));
+   await assert.rejects(compat.restore(),/ENOENT/);
+   writeFileSync(desktop,source);writeFileSync(glass,source);
+   assert.equal(await compat.restore(),false);
+ });
+});
+
+test("a different product configuration does not collide with an existing verified backup",async()=>{
+ await recoveryFixture(async({compat,plan,product})=>{
+   await compat.restore();
+   const data=JSON.parse(readFileSync(product,"utf8"));data.newFlag=true;writeFileSync(product,JSON.stringify(data));
+   const next=await compat.plan({url:"http://127.0.0.1:28743",token:"test-token"});
+   assert.equal(next.targets[0].originalHash,plan.targets[0].originalHash);
+   await compat.install(next);await compat.restore();
+   assert.equal(JSON.parse(readFileSync(product,"utf8")).newFlag,true);
+ });
+});
+
+test("retired legacy UI does not block compatibility but an unrecognized existing surface does",()=>{
+ const absent=nativeCompatibility(source);
+ assert.equal(absent.anchors.find(a=>a.id==="provider_legacy").required,false);
+ assert.equal(absent.anchors.find(a=>a.id==="provider_settings").required,false);
+ assert.equal(absent.ok,false); // missing native turn / active picker is still incompatible
+ const present=nativeCompatibility(source+"\ngetAvailableModelsReactiveWithStatus(renamed){}\ngetHardcodedLongContextOnlyModelNames(){}");
+ assert.equal(present.anchors.find(a=>a.id==="provider_legacy").ok,false);
+ assert.equal(present.anchors.find(a=>a.id==="provider_settings").ok,false);
+});
+
+test("a changed unpatched Workbench is not blessed with a new checksum when metadata is still stale",async()=>{
+ await recoveryFixture(async({compat,desktop,glass,product})=>{
+   const updated="unverified updated Workbench";
+   writeFileSync(desktop,updated);
+   const before=readFileSync(product,"utf8"),glassBefore=readFileSync(glass,"utf8");
+   await assert.rejects(compat.restore(),/old bridge checksum/);
+   assert.equal(readFileSync(desktop,"utf8"),updated);assert.equal(readFileSync(glass,"utf8"),glassBefore);assert.equal(readFileSync(product,"utf8"),before);
+ });
+});

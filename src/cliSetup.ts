@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { lock } from "proper-lockfile";
 import { platformPaths, resolveAgyExecutable, powershellQuote } from "./platform.ts";
 
 export type CliStatus = "checking" | "missing" | "ready" | "error" | "installing";
@@ -26,15 +27,16 @@ export function officialInstaller(platform: string): { file: string; args: strin
 
 export async function inspectCli(resolve = resolveAgyExecutable, execute: Run = run, explicit = Boolean(process.env.AGY_PATH)): Promise<CliResult> {
   const file = resolve();
-  let version: string;
+  let version: string | undefined;
   try { version = await execute(file, ["--version"], 15000); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT" && !explicit) return { status: "missing" };
-    return { status: "error", detail: "CLI 无法运行，请检查安装路径或 AGY_PATH，然后重新检测。" };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { status: "error", detail: "Configured AGY_PATH is unavailable. Check the path, then retry." };
+    // Version text is metadata, not an ACP capability requirement. Try ACP itself.
   }
   try { await execute(file, ["acp", "--help"], 15000); }
   catch { return { status: "error", detail: "当前 CLI 不支持或无法启动 ACP，请检查官方 CLI 版本。" }; }
-  return { status: "ready", version: version.split(/\r?\n/)[0].slice(0, 100) };
+  return { status: "ready", version: version?.split(/\r?\n/)[0].slice(0, 100) };
 }
 
 // No installer runs unless the user explicitly invokes setup and the CLI is absent.
@@ -51,23 +53,43 @@ export async function ensureCli(options: {
   return after;
 }
 
+// The previous release used an empty exclusive file. Respect fresh legacy
+// locks; an old file outliving the four-minute installer deadline can be retired.
+// The replacement uses a mature cross-process lock with a heartbeat.
+export async function acquireCliInstallLock(root: string): Promise<() => Promise<void>> {
+  await fs.mkdir(root, { recursive: true });
+  const lockPath = path.join(root, "cli-install.lock");
+  const stale = 10 * 60_000;
+  try {
+    const legacy = await fs.lstat(lockPath);
+    if (legacy.isFile() && legacy.size === 0 && Date.now() - legacy.mtimeMs > stale) {
+      const current = await fs.lstat(lockPath);
+      if (current.isFile() && current.size === 0 && current.mtimeMs === legacy.mtimeMs) {
+        await fs.unlink(lockPath).catch(error => {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        });
+      }
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  let compromised: Error | undefined;
+  const release = await lock(root, { lockfilePath: lockPath, stale, update: 30_000, retries: 0, onCompromised: error => { compromised = error; } });
+  return async () => {
+    if (compromised) throw compromised;
+    await release();
+  };
+}
+
 async function installOfficialCli(): Promise<void> {
   const command = officialInstaller(process.platform);
   const root = platformPaths().support;
-  await fs.mkdir(root, { recursive: true });
-  const lock = path.join(root, "cli-install.lock");
-  let handle: Awaited<ReturnType<typeof fs.open>>;
-  try { handle = await fs.open(lock, "wx", 0o600); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error("另一个窗口正在安装 CLI，或上次安装未完成。请先确认安装进程已结束，再重新检测。");
-    throw error;
-  }
+  const release = await acquireCliInstallLock(root);
   try {
     // Recheck after acquiring the cross-window lock, to avoid redundant installs.
     if ((await inspectCli()).status !== "missing") return;
     await run(command.file, command.args, 240000);
   } finally {
-    await handle.close();
-    await fs.rm(lock, { force: true });
+    await release();
   }
 }

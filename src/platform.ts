@@ -54,8 +54,23 @@ export async function probeDirectoryWritable(directory: string): Promise<boolean
   }
 }
 
-export function resolveNodeExecutable(): string {
-  if (process.platform !== "win32") return "node";
+export function bundledNodePath(appRoot: string, platform = process.platform): string {
+  const p = platform === "win32" ? path.win32 : path.posix;
+  return p.join(appRoot, "resources", "helpers", platform === "win32" ? "node.exe" : "node");
+}
+
+export function resolveNodeExecutable(appRoot?: string): string {
+  if (appRoot) {
+    const bundled = bundledNodePath(appRoot);
+    if (existsSync(bundled)) return bundled;
+  }
+  if (process.platform !== "win32") {
+    try {
+      const found = execFileSync("/bin/zsh", ["-lc", "command -v node"], { encoding: "utf8" }).trim();
+      if (found) return found;
+    } catch { /* allow the actual execution to report the missing runtime */ }
+    return "node";
+  }
   try {
     const candidates = execFileSync("where.exe", ["node.exe"], { encoding: "utf8", windowsHide: true })
       .split(/\r?\n/)

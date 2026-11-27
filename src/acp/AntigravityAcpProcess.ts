@@ -18,7 +18,7 @@ import type {
 
 export interface AcpClientHandlerRegistrar {
   register(app: ClientApp): void;
-  registerSession?(sessionId: string, cwd: string): void;
+  registerSession?(sessionId: string, cwd: string, toolsEnabled?: boolean): void;
   unregisterSession?(sessionId: string): void;
   dispose?(): void;
 }
@@ -136,7 +136,7 @@ export class AntigravityAcpProcess {
   }
 
   async getCatalogue(cwd: string): Promise<AntigravityCatalogue> {
-    const session = await this.createSession(cwd);
+    const session = await this.createSession(cwd, false);
     try {
       const availableModels = session.models?.availableModels ?? [];
       const initialOptions = (session.configOptions ?? []) as unknown as AntigravityConfigOption[];
@@ -177,22 +177,22 @@ export class AntigravityAcpProcess {
     }
   }
 
-  async createSession(cwd: string): Promise<AntigravityNewSessionResponse> {
+  async createSession(cwd: string, toolsEnabled = true): Promise<AntigravityNewSessionResponse> {
     const response = await this.requireConnection().agent.request("session/new", {
       cwd,
       mcpServers: [],
     }) as AntigravityNewSessionResponse;
-    this.clientHandlers?.registerSession?.(response.sessionId, cwd);
+    this.clientHandlers?.registerSession?.(response.sessionId, cwd, toolsEnabled);
     return response;
   }
 
-  async loadSession(sessionId: string, cwd: string) {
+  async loadSession(sessionId: string, cwd: string, toolsEnabled = true) {
     const response = await this.requireConnection().agent.request("session/load", {
       sessionId,
       cwd,
       mcpServers: [],
     });
-    this.clientHandlers?.registerSession?.(sessionId, cwd);
+    this.clientHandlers?.registerSession?.(sessionId, cwd, toolsEnabled);
     return response;
   }
 

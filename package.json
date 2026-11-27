@@ -2,7 +2,7 @@
   "name": "antigravity-cursor",
   "displayName": "Antigravity for Cursor",
   "description": "Cursor adapter for Antigravity Agent Bridge. Exposes Antigravity models in Cursor's native model picker.",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "publisher": "rizetngan",
   "license": "UNLICENSED",
@@ -84,7 +84,7 @@
     "probe:cursor-context": "node --experimental-strip-types scripts/probe-cursor-context.mjs",
     "install:test-copy": "node --experimental-strip-types scripts/install-test-copy.mjs",
     "restore:test-copy": "node --experimental-strip-types scripts/restore-test-copy.mjs",
-    "package:vsix": "node -e \"require('fs').mkdirSync('releases',{recursive:true})\" && npx --yes @vscode/vsce package --no-dependencies --out releases/antigravity-cursor-1.2.2.vsix",
+    "package:vsix": "node -e \"require('fs').mkdirSync('releases',{recursive:true})\" && npx --yes @vscode/vsce package --no-dependencies --out releases/antigravity-cursor-1.2.3.vsix",
     "verify:test-copy": "node --experimental-strip-types scripts/verify-test-copy.mjs",
     "probe:gateway": "bash scripts/run-gateway-probe.sh",
     "probe:extension-activation": "node scripts/probe-extension-activation.mjs",
@@ -92,10 +92,12 @@
     "probe:tools": "zsh scripts/run-tool-probe.sh"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^2.12.0"
+    "@agentclientprotocol/sdk": "^2.12.0",
+    "proper-lockfile": "4.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
+    "@types/proper-lockfile": "4.1.4",
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.9.0"

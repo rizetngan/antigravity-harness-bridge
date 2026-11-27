@@ -2,11 +2,18 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createServer } from "node:http";
+import { writeFile } from "node:fs/promises";
+import { gatewayLocation } from "../src/gateway/location.ts";
+import { platformPaths } from "../src/platform.ts";
+import { START } from "../src/cursor/compat.ts";
 import { AntigravityGateway } from "../src/gateway/AntigravityGateway.ts";
 
 const temp = await mkdtemp(path.join(tmpdir(), "antigravity-lifecycle-"));
 const previousHome = process.env.HOME;
+const previousLocal = process.env.LOCALAPPDATA;
 process.env.HOME = temp;
+process.env.LOCALAPPDATA = path.join(temp,"local");
 const app = path.join(temp, "Test.app", "Contents", "Resources", "app");
 const profile = path.join(temp, "profile", "User", "globalStorage", "rizetngan.antigravity-cursor");
 const otherProfile = path.join(temp, "other", "User", "globalStorage", "rizetngan.antigravity-cursor");
@@ -16,6 +23,8 @@ const output = { appendLine(){}, clear(){}, show(){} };
 const gateway = new AntigravityGateway(output, profile, app);
 const other = new AntigravityGateway(output, otherProfile, app);
 const separateApp = new AntigravityGateway(output, otherProfile, path.join(temp, "Other.app", "Contents", "Resources", "app"));
+const extra = [];
+const blockers = [];
 const health = c => fetch(c.url + "/health", { headers: { Authorization: "Bearer " + c.token }, signal: AbortSignal.timeout(1500) });
 try {
   const config = await gateway.start();
@@ -42,9 +51,39 @@ try {
   assert.equal((await health(restarted)).status,200);
   await gateway.stop();
   assert.equal(gateway.running,false);
+  const freshApp = path.join(temp,"Fresh","resources","app");
+  const location = gatewayLocation(platformPaths().support,freshApp);
+  let observedAuthorization;
+  const occupant = createServer((req,res)=>{observedAuthorization=req.headers.authorization;res.writeHead(404);res.end();});
+  blockers.push(occupant);
+  await new Promise((resolve,reject)=>{occupant.once("error",reject);occupant.listen(location.port,"127.0.0.1",resolve);});
+  const fresh = new AntigravityGateway(output,profile,freshApp);extra.push(fresh);
+  const chosen = await fresh.start(false,true);
+  assert.notEqual(chosen.url,"http://127.0.0.1:"+location.port);
+  assert.ok(observedAuthorization);
+  assert.notEqual(observedAuthorization,"Bearer "+chosen.token);
+  assert.equal(gatewayLocation(platformPaths().support,freshApp).port,Number(new URL(chosen.url).port));
+  assert.equal((await health(chosen)).status,200);
+  const same = new AntigravityGateway(output,profile,freshApp);extra.push(same);
+  assert.deepEqual(await same.start(),chosen);
+  const unrelated = new AntigravityGateway(output,otherProfile,freshApp);extra.push(unrelated);
+  await assert.rejects(unrelated.start(false,true),/EADDRINUSE/);
+  const patchedApp = path.join(temp,"Patched","resources","app");
+  const workbench = path.join(patchedApp,"out","vs","workbench");
+  await mkdir(workbench,{recursive:true});
+  await writeFile(path.join(workbench,"workbench.desktop.main.js"),START+"\n");
+  const patchedLocation = gatewayLocation(platformPaths().support,patchedApp);
+  const occupied = createServer((_req,res)=>{res.writeHead(404);res.end();});blockers.push(occupied);
+  await new Promise((resolve,reject)=>{occupied.once("error",reject);occupied.listen(patchedLocation.port,"127.0.0.1",resolve);});
+  const patched = new AntigravityGateway(output,profile,patchedApp);extra.push(patched);
+  await assert.rejects(patched.start(false,true),/EADDRINUSE/);
+  console.log("PASS: real occupied port, fresh endpoint selection, persistent lookup, same-profile reuse, different-profile rejection, installed Workbench endpoint protected");
   console.log("PASS: start / stop / restart / authenticated paused control listener, no ACP routes / same-app profile rejection / independent app credentials / unrelated service preserved");
 } finally {
   gateway.dispose(); other.dispose(); separateApp.dispose();
-  process.env.HOME = previousHome;
+  for(const item of extra)item.dispose();
+  for(const server of blockers){server.closeAllConnections();await new Promise(resolve=>server.close(()=>resolve()));}
+  if(previousHome===undefined)delete process.env.HOME;else process.env.HOME=previousHome;
+  if(previousLocal===undefined)delete process.env.LOCALAPPDATA;else process.env.LOCALAPPDATA=previousLocal;
   await rm(temp,{recursive:true,force:true});
 }

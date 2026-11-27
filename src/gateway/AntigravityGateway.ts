@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { sessionWorkspace } from "./workspacePolicy.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -12,7 +13,9 @@ import { CursorConversationReader, type CursorConversationSnapshot } from "../co
 import { buildContextSnapshot } from "../context/ContextSnapshot.js";
 import { parseNativeHistory, nativeSnapshot, nativeHistoryFingerprint } from "../context/NativeHistory.js";
 import { SessionStore, type CursorAcpSessionRecord } from "../session/SessionStore.js";
-import { gatewayLocation } from "./location.js";
+import { gatewayLocation, readGatewayPort, persistGatewayPort } from "./location.js";
+import { lock } from "proper-lockfile";
+import { CursorCompatibility } from "../cursor/compat.js";
 import {
   adaptSessionUpdate,
   buildCheckpointData,
@@ -89,7 +92,8 @@ export class AntigravityGateway {
   private readonly reader: CursorConversationReader;
   private readonly output: vscode.OutputChannel;
   private readonly storageDirectory: string;
-  private readonly port: number;
+  private port: number;
+  private readonly appRoot?: string;
   private readonly sessions: SessionStore;
   private readonly profileId: string;
   private borrowedGateway = false;
@@ -118,6 +122,7 @@ export class AntigravityGateway {
 
   constructor(output: vscode.OutputChannel, profileStorage?: string, appRoot?: string, onRemoteStop?: () => Promise<void>) {
     this.onRemoteStop = onRemoteStop;
+    this.appRoot = appRoot;
     this.output = output;
     const location = gatewayLocation(platformPaths().support, appRoot);
     this.storageDirectory = location.directory;
@@ -143,6 +148,7 @@ export class AntigravityGateway {
 
   async attachExisting(): Promise<boolean> {
     await fs.mkdir(this.storageDirectory, { recursive: true });
+    this.port = readGatewayPort(this.storageDirectory, this.port);
     this.token = await this.loadOrCreateToken();
     if (!(await this.existingGatewayIsHealthy())) { this.token = ""; return false; }
     this.borrowedGateway = true;
@@ -192,7 +198,7 @@ export class AntigravityGateway {
     } finally { this.stopping = false; }
   }
 
-  async start(paused = false): Promise<GatewayConfig> {
+  async start(paused = false, allowAlternatePort = false): Promise<GatewayConfig> {
     if (this.disposed || this.stopping) throw new Error("Antigravity service is stopping or disposed.");
     if (this.borrowedGateway) {
       if (await this.existingGatewayIsHealthy()) {
@@ -216,40 +222,72 @@ export class AntigravityGateway {
       return this.config();
     }
     await fs.mkdir(this.storageDirectory, { recursive: true });
-    this.token = await this.loadOrCreateToken();
-
-    const server = createServer((request, response) => {
-      void this.handleRequest(request, response);
+    // Serialize initial token/endpoint selection across windows. Normal start/stop
+    // of the same listener never needs this lock.
+    const release = await lock(this.storageDirectory, {
+      lockfilePath: path.join(this.storageDirectory, "gateway-start.lock"),
+      stale: 600_000, update: 30_000,
+      retries: { retries: 6, minTimeout: 100, maxTimeout: 500 },
     });
-
     try {
-      await new Promise<void>((resolve, reject) => {
+      if (this.server && this.token) {
+        await this.setPaused(paused);
+        this.paused = paused;
+        this.revision += 1;
+        return this.config();
+      }
+      this.port = readGatewayPort(this.storageDirectory, this.port);
+      this.token = await this.loadOrCreateToken();
+      const server = createServer((request, response) => {
+        void this.handleRequest(request, response);
+      });
+      const listen = (port: number) => new Promise<void>((resolve, reject) => {
         const onError = (error: NodeJS.ErrnoException) => {
-          server.off("listening", onListening);
-          reject(error);
+          server.off("listening", onListening); reject(error);
         };
         const onListening = () => {
-          server.off("error", onError);
-          resolve();
+          server.off("error", onError); resolve();
         };
         server.once("error", onError);
         server.once("listening", onListening);
-        server.listen(this.port, HOST);
+        server.listen(port, HOST);
       });
-      this.server = server;
-      await this.setPaused(paused);
-      this.paused = paused;
-      this.output.appendLine("Local ACP gateway listening at http://" + HOST + ":" + this.port);
-    } catch (error) {
-      server.close();
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "EADDRINUSE" || !(await this.existingGatewayIsHealthy())) throw error;
-      this.borrowedGateway = true;
-      if (!paused) await this.remoteControl("start");
-      await this.syncRemoteStatus();
-      this.output.appendLine("Reusing the authenticated ACP gateway started by another window of this profile.");
-    }
-    return this.config();
+      try {
+        try { await listen(this.port); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+          const health = await this.readExistingGatewayHealth();
+          if (health?.profileId === this.profileId && health.ok === true) {
+            this.borrowedGateway = true;
+            if (!paused) await this.remoteControl("start");
+            await this.syncRemoteStatus();
+            this.output.appendLine("Reusing the authenticated ACP gateway started by another window of this profile.");
+            return this.config();
+          }
+          // A working bridge belonging to another profile remains isolated.
+          // An installed Workbench embeds its endpoint; never relocate it silently.
+          if (health?.ok === true || !allowAlternatePort || !this.appRoot ||
+              await new CursorCompatibility(this.appRoot, this.storageDirectory, "").hasInstalledMarkers()) throw error;
+          await listen(0);
+          const address = server.address();
+          if (!address || typeof address === "string") throw new Error("Unable to obtain the local gateway port.");
+          // Do not reuse the token sent to an unrelated occupant during the health probe.
+          this.token = randomBytes(32).toString("base64url");
+          await fs.writeFile(path.join(this.storageDirectory, "bridge-token"), this.token, { mode: 0o600 });
+          await persistGatewayPort(this.storageDirectory, address.port);
+          this.port = address.port;
+          this.output.appendLine("Preferred local port occupied; assigned an available port for the new integration.");
+        }
+        await this.setPaused(paused);
+        this.paused = paused;
+        this.server = server;
+        this.output.appendLine("Local ACP gateway listening at http://" + HOST + ":" + this.port);
+      } catch (error) {
+        server.close();
+        throw error;
+      }
+      return this.config();
+    } finally { await release(); }
   }
 
   async refreshCatalogue(force = false): Promise<ReturnType<typeof buildCursorModelDefinitions>> {
@@ -412,18 +450,20 @@ export class AntigravityGateway {
     return { url: `http://${HOST}:${this.port}`, token: this.token };
   }
 
-  private async existingGatewayIsHealthy(): Promise<boolean> {
+  private async readExistingGatewayHealth(): Promise<{ ok?: boolean; profileId?: string } | undefined> {
     try {
       const response = await fetch("http://" + HOST + ":" + this.port + "/health", {
         headers: { Authorization: "Bearer " + this.token },
         signal: AbortSignal.timeout(1500),
       });
-      if (!response.ok) return false;
-      const health = await response.json() as { profileId?: string };
-      return health.profileId === this.profileId;
-    } catch {
-      return false;
-    }
+      if (!response.ok) return undefined;
+      return await response.json() as { ok?: boolean; profileId?: string };
+    } catch { return undefined; }
+  }
+
+  private async existingGatewayIsHealthy(): Promise<boolean> {
+    const health = await this.readExistingGatewayHealth();
+    return health?.ok === true && health.profileId === this.profileId;
   }
 
   private async loadOrCreateToken(): Promise<string> {
@@ -453,7 +493,7 @@ export class AntigravityGateway {
       return this.sendJson(response, 200, {
         ok: true,
         running: this.running,
-        version: "1.2.0",
+        version: "1.2.3",
         profileId: this.profileId,
         catalogRequests: this.catalogRequestCount,
         runRequests: this.runRequestCount,
@@ -629,11 +669,8 @@ export class AntigravityGateway {
       }
     }
 
-    const workspaceFolders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
-    const cwd = workspaceFolders[0];
-    if (!cwd || !path.isAbsolute(cwd)) {
-      throw new Error("Open a local workspace before using Antigravity Agent.");
-    }
+    const { cwd, toolsEnabled } = sessionWorkspace(vscode.workspace.workspaceFolders, path.join(this.storageDirectory, "chat-only"));
+    if (!toolsEnabled) await fs.mkdir(cwd, { recursive: true });
 
     let stored = await this.sessions.get(conversationId);
     if (stored && (nativeHistory
@@ -647,7 +684,7 @@ export class AntigravityGateway {
     }
 
     this.output.appendLine(`Starting Cursor conversation ${conversationId.slice(0, 12)} in ${cwd}`);
-    const session = await this.ensureSession(conversationId, cwd, stored);
+    const session = await this.ensureSession(conversationId, cwd, stored, toolsEnabled);
     const selection = resolveAcpModelSelection(model, getThinkingEffort(runRequest));
     await this.acp.setConfigOption(session.sessionId, "model", selection.model);
     if (selection.thoughtLevel) {
@@ -690,7 +727,7 @@ export class AntigravityGateway {
     const promptText = buildPromptText(
       [contextText, attachmentContext].filter(Boolean).join("\\n\\n"),
       currentText || "Continue the current task using the imported Cursor conversation context.",
-      getCustomSystemPrompt(runRequest),
+      [getCustomSystemPrompt(runRequest), !toolsEnabled ? "No local workspace is open. Respond in chat; ask the user to open a local folder if file or terminal operations are needed." : ""].filter(Boolean).join("\n"),
     );
 
     const active: ActiveRun = {
@@ -779,17 +816,18 @@ export class AntigravityGateway {
     composerId: string,
     cwd: string,
     stored?: CursorAcpSessionRecord,
+    toolsEnabled = true,
   ): Promise<{ sessionId: string; isNew: boolean }> {
     if (stored && samePath(stored.cwd, cwd)) {
       try {
-        await this.acp.loadSession(stored.sessionId, cwd);
+        await this.acp.loadSession(stored.sessionId, cwd, toolsEnabled);
         return { sessionId: stored.sessionId, isNew: false };
       } catch (error) {
         this.output.appendLine(`Stored Antigravity session could not be resumed; creating a new session: ${safeError(error)}`);
         await this.sessions.delete(composerId);
       }
     }
-    const created = await this.acp.createSession(cwd);
+    const created = await this.acp.createSession(cwd, toolsEnabled);
     return { sessionId: created.sessionId, isNew: true };
   }
 

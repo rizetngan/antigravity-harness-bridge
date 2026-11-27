@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { platformPaths, isCursorResources, powershellQuote, probeDirectoryWritable } from "../src/platform.ts";
+import { platformPaths, isCursorResources, powershellQuote, probeDirectoryWritable, bundledNodePath } from "../src/platform.ts";
 test("Windows uses local app data, roaming Cursor profile and official agy.exe", () => {
   const home = "C:\\Users\\Test User";
   const x = platformPaths("win32", {LOCALAPPDATA: "D:\\Local Data", APPDATA: "D:\\Roaming Data"}, home);
@@ -39,4 +39,9 @@ test("Windows PowerShell array splatting preserves paths with spaces and apostro
   const encoded = Buffer.from(script, "utf16le").toString("base64");
   const output = execFileSync("powershell.exe", ["-NoProfile", "-EncodedCommand", encoded], { encoding: "utf8" });
   assert.deepEqual(JSON.parse(output.trim()), args);
+});
+
+test("uses Cursor bundled helper layout on custom drives and macOS app paths",()=>{
+ assert.equal(bundledNodePath("D:/Cursor Space/resources/app","win32"),"D:\\Cursor Space\\resources\\app\\resources\\helpers\\node.exe");
+ assert.equal(bundledNodePath("/Applications/Cursor.app/Contents/Resources/app","darwin").replaceAll("\\","/"),"/Applications/Cursor.app/Contents/Resources/app/resources/helpers/node");
 });

@@ -25,11 +25,10 @@ export function allowedAction(action: unknown, state: PanelState): action is Pan
   if (action === "checkCli") return state.cli.status === "error" || state.cli.status === "missing";
   if (action === "enable") return state.patch === "disabled" && state.cli.status === "ready";
   if (action === "restore") return ["enabled", "partial", "unsupported"].includes(state.patch) && !state.active;
-  if (action === "login" && state.patch === "disabled") return state.cli.status === "ready" && !state.active;
+  if (action === "login") return state.cli.status === "ready" && !state.active;
+  if (action === "stop") return state.running && !state.active;
   if (state.patch !== "enabled") return false;
   if (action === "start") return !state.running && state.cli.status === "ready";
-  if (action === "stop") return state.running && !state.active;
-  if (action === "login") return state.running && !state.active && state.cli.status === "ready";
-  if (action === "refresh") return state.running && !state.connecting && state.cli.status === "ready";
+  if (action === "refresh") return state.running && !state.connecting;
   return false;
 }

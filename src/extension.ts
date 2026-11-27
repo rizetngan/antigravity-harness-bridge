@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
-import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, probeDirectoryWritable, powershellQuote, installationKey, samePath } from "./platform.ts";
+import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, bundledNodePath, probeDirectoryWritable, powershellQuote, installationKey, samePath } from "./platform.ts";
 import path from "node:path";
 import { buildLoginCommand, ensureCli, inspectCli, type CliResult } from "./cliSetup.js";
 import { AntigravityGateway } from "./gateway/AntigravityGateway.js";
@@ -69,8 +69,6 @@ async function openAgyLoginTerminal(
 
   const executable = resolveAgyExecutable();
   const windows = process.platform === "win32";
-  const probe = spawnSync(executable, ["--version"], { encoding: "utf8", windowsHide: true, timeout: 15000 });
-  if (probe.error || probe.status !== 0) throw new Error("未找到可用的 Antigravity CLI（agy），请先安装官方 CLI。");
   const terminal = vscode.window.createTerminal({
     name: "Antigravity Sign In",
     cwd: homedir(),
@@ -84,6 +82,10 @@ async function openAgyLoginTerminal(
     closeListener.dispose();
     if (loginTerminal === terminal) loginTerminal = undefined;
     try {
+      if (!gateway.running) {
+        output.appendLine("Antigravity sign-in terminal closed; start the service to verify the account.");
+        return;
+      }
       const models = await gateway.reconnect();
       output.appendLine("Antigravity sign-in verified · ACP restarted · " + models.length + " model families");
       void vscode.window.showInformationMessage("Antigravity 已连接 · " + models.length + " 个模型系列");
@@ -121,7 +123,7 @@ async function runWindowsElevatedCompatibility(
   action: "install" | "restore",
   paths: ReturnType<typeof createCompatibility>,
 ): Promise<void> {
-  const nodePath = resolveNodeExecutable();
+  const nodePath = resolveNodeExecutable(paths.appRoot);
   const helperPath = context.asAbsolutePath(path.join("dist", "installer.cjs"));
   const rendererPath = context.asAbsolutePath(path.join("dist", "renderer.js"));
   const supportPath = platformPaths().support;
@@ -203,7 +205,7 @@ async function runPrivilegedCompatibility(
   if (process.platform !== "darwin") {
     throw new Error("当前系统不支持对 Cursor 安装目录进行管理员授权修改。");
   }
-  const nodePath = execFileSync("/bin/zsh", ["-lc", "command -v node"], { encoding: "utf8" }).trim();
+  const nodePath = resolveNodeExecutable(paths.appRoot);
   if (!nodePath) throw new Error("没有找到 Node.js，无法启动安全安装助手。");
 
   const helperPath = context.asAbsolutePath(path.join("dist", "installer.cjs"));
@@ -254,7 +256,8 @@ async function installRecoveryTool(
     const elevatedScript = path.join(paths.recoveryPath, "restore-elevated.ps1");
     await fs.writeFile(elevatedScript, [
       "$ErrorActionPreference = 'Stop'",
-      "$nodePath = (Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source",
+      "$nodePath = " + powershellQuote(bundledNodePath(paths.appRoot)),
+      "if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { $nodePath = (Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source }",
       "$restorePath = Join-Path $PSScriptRoot 'restore.cjs'",
       "$argumentLine = '\"' + $restorePath + '\"'",
       "$process = Start-Process -FilePath $nodePath -ArgumentList $argumentLine -Verb RunAs -Wait -PassThru",
@@ -285,10 +288,12 @@ async function installRecoveryTool(
     " & \" \" & quoted form of " + appleScriptQuote(supportPath) +
     " & \" \" & quoted form of " + appleScriptQuote(String(uid)) +
     " & \" \" & quoted form of " + appleScriptQuote(String(gid));
+  const bundled = bundledNodePath(paths.appRoot);
+  const findNode = "if test -x " + shellQuote(bundled) + "; then printf '%s' " + shellQuote(bundled) + "; else /bin/zsh -lc 'command -v node'; fi";
   const script = [
     "#!/bin/zsh",
     "/usr/bin/osascript <<'APPLESCRIPT'",
-    'set nodePath to do shell script "/bin/zsh -lc \'command -v node\'"',
+    "set nodePath to do shell script " + appleScriptQuote(findNode),
     commandLine,
     "do shell script cmd with administrator privileges",
     'display dialog "Cursor 已恢复。" buttons {"好"} default button "好"',
@@ -314,7 +319,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let patch: PatchState = "checking";
   let reload = false;
   let cli: CliResult = { status: "checking" };
-  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.2" }), context.asAbsolutePath("media/management.html"));
+  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.3" }), context.asAbsolutePath("media/management.html"));
   context.subscriptions.push(panel, vscode.window.registerWebviewViewProvider(VIEW_ID, panel, { webviewOptions: { retainContextWhenHidden: false } }));
   // Cursor can hide the Activity Bar in its Agent-oriented layout. The native
   // status item provides the same one-click entry without changing that layout.
@@ -346,6 +351,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   const requireCli = async (): Promise<boolean> => {
     if (setupPending) return false;
+    if (cli.status === "ready" || gateway.panelStatus.connected) return true;
     const state = await checkCli();
     if (state.status === "ready") return true;
     void vscode.window.showWarningMessage(state.status === "missing" ? "缺少 Antigravity CLI，请在管理面板点击「安装并连接」。" : state.detail || "CLI 不可用，请重新检测。");
@@ -360,7 +366,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       panel.publish();
       if (cli.status !== "ready") throw new Error(cli.detail || "CLI 未就绪");
       output.appendLine("Antigravity CLI verified: " + (cli.version || "ready"));
-      await gateway.start();
+      await gateway.start(false, patch === "disabled");
       await context.globalState.update("servicePaused", false);
       try {
         const models = await gateway.refreshCatalogue(true);
@@ -422,8 +428,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const signInCommand = vscode.commands.registerCommand("antigravityCursor.signIn", async () => {
     try {
       if (!(await requireCli())) return;
-      if (!gateway.running && patch === "disabled") await gateway.start();
-      if (!gateway.running) throw new Error("请先启动 Antigravity 服务。");
       await openAgyLoginTerminal(context, gateway, output);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -489,19 +493,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         throw new Error("检测到不完整的 Workbench 补丁。请先执行“恢复 Cursor”，再重新启用。");
       }
 
-      const config = await gateway.start();
-      // Confirm the official ACP account can return models before modifying Cursor.
+      const config = await gateway.start(false, true);
+      let accountReady = false;
       try {
         const models = await gateway.refreshCatalogue(true);
-        if (!models.length) throw new Error("Antigravity 账号未返回可用模型。");
+        accountReady = models.length > 0;
       } catch (error) {
-        if (isAuthenticationRequired(error instanceof Error ? error.message : String(error))) {
-          await openAgyLoginTerminal(context, gateway, output);
-          panel.publish();
-          return;
-        }
-        throw error;
+        output.appendLine("Antigravity account not yet ready: " + (error instanceof Error ? error.message : String(error)));
       }
+      // Local installation is independent of network/login, but a provider
+      // that has never connected must not be activated or invent model access.
+      if (!accountReady) await gateway.stop();
       const plan = await paths.service.plan(config);
       if (!plan.targets.length) throw new Error("没有可安装的 Workbench 目标文件。");
       const writable = await canWriteDirectory(plan.targets[0].path);
@@ -515,10 +517,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (await readPatchState(paths.service) !== "enabled") {
         throw new Error("补丁写入后未通过完整性复验。");
       }
-      await context.globalState.update("servicePaused", false);
+      await context.globalState.update("servicePaused", !accountReady);
       output.appendLine("Backups: " + paths.storagePath);
       patch = "enabled"; reload = true; panel.publish();
-      await offerReload("Antigravity 原生模型接入已启用。请完全退出并重新打开 Cursor。");
+      await offerReload(accountReady ? "原生模型接入已启用，请完全退出并重新打开 Cursor。" : "原生接入已安装，服务暂停。重开 Cursor 后可登录 Antigravity 并启动服务。");
     } catch (error) {
       try {
         const currentState = await readPatchState(createCompatibility(context, true).service);
@@ -537,7 +539,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const startService = vscode.commands.registerCommand("antigravityCursor.startService", async () => {
     if (setupPending || !(await requireCli())) return;
     try {
-      const state = await readPatchState(createCompatibility(context, true).service);
+      const state = patch === "enabled" ? patch : await readPatchState(createCompatibility(context, true).service);
       if (state !== "enabled") throw new Error("请先启用原生模型接入。");
       await gateway.start();
       await context.globalState.update("servicePaused", false);
@@ -567,33 +569,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try {
       const paths = createCompatibility(context, true);
       const journalPath = path.join(paths.storagePath, "compatibility.json");
-      await fs.access(journalPath);
-      const journal = JSON.parse(await fs.readFile(journalPath, "utf8")) as {
-        targets?: Array<{ file?: string }>;
-      };
-      const targetFile = journal.targets?.[0]?.file;
-      if (!targetFile) throw new Error("备份记录缺少目标文件，无法安全恢复。");
+      let journal: { targets?: Array<{ file?: string }> } | undefined;
+      try { journal = JSON.parse(await fs.readFile(journalPath, "utf8")); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT" || await paths.service.hasInstalledMarkers()) throw error;
+      }
+      const targetFile = journal?.targets?.[0]?.file;
+      if (!targetFile && await paths.service.hasInstalledMarkers()) throw new Error("Bridge recovery record is missing.");
       await gateway.stop();
       await context.globalState.update("servicePaused", true);
-      const writable = await canWriteDirectory(targetFile);
+      const writable = !targetFile || await canWriteDirectory(targetFile);
       if (writable) {
-        await paths.service.restore();
+        const restored = await paths.service.restore();
+        if (!restored) {
+          patch = await readPatchState(paths.service).catch(() => "unsupported" as const);
+          panel.publish();
+          void vscode.window.showInformationMessage("No Antigravity modifications need to be restored.");
+          return;
+        }
       } else {
         await runPrivilegedCompatibility(context, "restore", paths);
       }
-      if (await readPatchState(paths.service) !== "disabled") {
-        throw new Error("恢复后 Workbench 仍检测到 Antigravity 补丁。");
-      }
+      if (await paths.service.hasInstalledMarkers()) throw new Error("Bridge modifications remain after recovery.");
       output.appendLine("Cursor Workbench restored from the verified original backup.");
-      patch = "disabled"; reload = true; panel.publish();
+      patch = await readPatchState(paths.service).catch(() => "unsupported" as const); reload = true; panel.publish();
       await offerReload("Cursor 已恢复原始 Workbench。请完全退出并重新打开 Cursor。");
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException)?.code;
       const message = error instanceof Error ? error.message : String(error);
-      if (code === "ENOENT") {
-        void vscode.window.showInformationMessage("没有找到本扩展安装的兼容补丁，Cursor 无需恢复。");
-        return;
-      }
       output.appendLine("Cursor restore failed: " + message);
       output.show(true);
       void vscode.window.showErrorMessage("恢复失败：" + message);
@@ -603,8 +605,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   try {
     const paths = createCompatibility(context, true);
-    const recoveryTool = await installRecoveryTool(context, paths);
-    output.appendLine("Standalone recovery tool: " + recoveryTool);
+    try {
+      const recoveryTool = await installRecoveryTool(context, paths);
+      output.appendLine("Standalone recovery tool: " + recoveryTool);
+    } catch (error) {
+      output.appendLine("Standalone recovery tool unavailable: " + (error instanceof Error ? error.message : String(error)));
+    }
     const patchState = await readPatchState(paths.service);
     patch = patchState; panel.publish();
     await checkCli();

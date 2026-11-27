@@ -16,7 +16,7 @@ test("service switch, model refresh and login reflect gateway state",()=>{
  const stopped={...base,patch:"enabled"};
  assert.equal(allowedAction("start",stopped),true);
  assert.equal(allowedAction("stop",stopped),false);
- assert.equal(allowedAction("login",stopped),false);
+ assert.equal(allowedAction("login",stopped),true);
  const running={...stopped,running:true};
  assert.equal(allowedAction("stop",running),true);
  assert.equal(allowedAction("refresh",running),true);
@@ -47,4 +47,10 @@ test("missing CLI gates native enable, start and login; restore stays available"
  assert.equal(allowedAction("setup",{...missing,active:1}),false);
  assert.equal(allowedAction("checkCli",{...base,cli:{status:"error"}}),true);
  assert.equal(allowedAction("setup",base),false);
+});
+
+test("login is independent of host compatibility and model refresh uses the running service",()=>{
+ assert.equal(allowedAction("login",{...base,patch:"unsupported"}),true);
+ assert.equal(allowedAction("refresh",{...base,patch:"enabled",running:true,cli:{status:"error"}}),true);
+ assert.equal(allowedAction("stop",{...base,patch:"unsupported",running:true}),true);
 });

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.3 - Compatibility resilience (candidate)
+
+- Recover clean host updates without rolling back a newer Cursor; merge only bridge-owned product checksum fields and preflight conflicts before recovery writes.
+- Avoid repeated CLI version probes and stale install locks. Sign-in and model refresh no longer depend on unrelated panel state. Allow confirmed local enablement while offline, keeping the provider paused until explicitly started.
+- Prefer the host bundled Node helper for administrator install and independent recovery, with system Node fallback.
+- Fresh installations can use an available loopback port if the preferred port is occupied; retain existing endpoint and authenticated profile isolation.
+- Enable ordinary empty-window conversations without granting bridge filesystem/terminal roots.
+- Preserve native routing, model account authorization, transcript checkpoint integrity and existing provider switching.
+
+
 ## 1.2.2 — Windows path compatibility fix
 
 - Normalize Windows installation and profile identity across drive-letter case, directory case, separators and trailing slashes, without changing paths used for file I/O.

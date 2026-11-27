@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { samePath } from "../src/platform.ts";
-import { gatewayLocation } from "../src/gateway/location.ts";
+import { gatewayLocation, persistGatewayPort } from "../src/gateway/location.ts";
 test("keeps isolated and daily installations on separate authenticated endpoints", () => {
   const support = "/Users/test/Library/Application Support/Antigravity for Cursor";
   const daily = gatewayLocation(support, "/Applications/Cursor.app/Contents/Resources/app");
@@ -39,4 +39,17 @@ test("adopts an existing mixed-case Windows journal and its original gateway", (
     assert.equal(a.port, 30000 + parseInt(oldKey.slice(0, 4), 16) % 20000);
     assert.deepEqual(a, gatewayLocation(support, root, "win32"));
   } finally { rmSync(support, { recursive: true, force: true }); }
+});
+
+test("a selected replacement endpoint is stable across new processes and installer lookup",async()=>{
+ const support=mkdtempSync(path.join(tmpdir(),"bridge-port-"));
+ try {
+  const root=path.join(support,"Cursor","resources","app");
+  const first=gatewayLocation(support,root);
+  mkdirSync(first.directory,{recursive:true});
+  await persistGatewayPort(first.directory,53217);
+  assert.equal(gatewayLocation(support,root).port,53217);
+  assert.equal(gatewayLocation(support,root).directory,first.directory);
+  assert.notEqual(gatewayLocation(support,root+"-other").directory,first.directory);
+ }finally{rmSync(support,{recursive:true,force:true});}
 });
