@@ -38,7 +38,7 @@ SHA-256 for the V1.2.0 VSIX:
 46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb
 ```
 
-Requires Cursor and the [official Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli), with your own Antigravity account. Initial integration may require normal OS authorization; daily service switching does not require elevation or restart.
+**Installing the Antigravity desktop app alone is not sufficient.** The adapter requires Cursor and the separately installed [official Antigravity CLI (`agy`)](https://antigravity.google/docs/getting-started?tab=cli). Keep your desktop app; install the CLI only if missing, and use the official account sign-in flow. Use the dependency-check commands or agent-assisted installation below. Initial integration may require normal OS authorization; daily service switching does not require elevation or restart.
 
 ## Highlights
 
@@ -111,7 +111,49 @@ Cursor integration depends on version-specific Workbench resources. Recheck comp
 
 ## Installation
 
-1. Install the official Antigravity CLI, verify `agy --version`, and follow the official sign-in flow.
+### Step 1: Detect and install the official CLI if needed
+
+The desktop app and `agy` are distinct installation components. The bridge calls the official agent via `agy acp`, not the desktop application. Reuse a working CLI installation instead of reinstalling or upgrading it. These commands check PATH and the official default location, invoke Google's installer only when the CLI is missing, and verify the version and ACP command.
+
+**macOS · Terminal**
+
+```bash
+set -e
+agy_bin="$(command -v agy || true)"
+if [ -z "$agy_bin" ] && [ -x "$HOME/.local/bin/agy" ]; then
+  agy_bin="$HOME/.local/bin/agy"
+fi
+if [ -z "$agy_bin" ]; then
+  curl -fsSL https://antigravity.google/cli/install.sh | bash
+  agy_bin="$HOME/.local/bin/agy"
+fi
+"$agy_bin" --version
+"$agy_bin" acp --help
+```
+
+**Windows · PowerShell**
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$agy = Get-Command agy.exe -ErrorAction SilentlyContinue
+$agyPath = if ($agy) { $agy.Source } else { Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe' }
+if (-not (Test-Path $agyPath)) {
+    irm https://antigravity.google/cli/install.ps1 | iex
+    $agyPath = Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe'
+}
+& $agyPath --version
+if ($LASTEXITCODE -ne 0) { throw 'agy verification failed' }
+& $agyPath acp --help
+if ($LASTEXITCODE -ne 0) { throw 'ACP unavailable' }
+```
+
+Default locations: macOS `~/.local/bin/agy`; Windows `%LOCALAPPDATA%\agy\bin\agy.exe`. The absolute path works even before PATH is refreshed. For a custom installation, use the actual executable or add its directory to PATH. If sign-in is required, launch the detected CLI and complete the official interactive sign-in. Reuse valid authentication when available.
+
+[Google's official CLI installation guide](https://antigravity.google/docs/getting-started?tab=cli)
+
+### Step 2: Enable Cursor integration
+
+1. Verify the CLI and ACP are available, and complete official sign-in if needed.
 2. Download the VSIX. In Cursor's Extensions view, choose **Install from VSIX...**.
 3. Open **Antigravity** from the status bar and select **Enable Native Models**.
 4. Confirm any required system permission, then fully quit and reopen Cursor.
@@ -121,12 +163,11 @@ Cursor integration depends on version-specific Workbench resources. Recheck comp
 
 ### Terminal installation
 
-The following commands install the verified V1.2.0 release and check its checksum. Cursor and the official Antigravity CLI must already be installed. Initial integration is still confirmed from the management panel.
+The following commands install the verified V1.2.0 release and check its checksum. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
 
 **macOS**
 
 ```bash
-agy --version
 set -e
 file="/tmp/antigravity-cursor-1.2.0.vsix"
 curl -fL --connect-timeout 15 \
@@ -145,7 +186,6 @@ Adjust the CLI path if Cursor is installed elsewhere. Grant App Management permi
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-agy --version
 $file = Join-Path $env:TEMP 'antigravity-cursor-1.2.0.vsix'
 Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix' -OutFile $file
 $expected = '46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb'
@@ -165,7 +205,10 @@ Copy this prompt into an agent with access to the local computer, such as ChatGP
 Install the latest stable Antigravity Agent Bridge on this computer:
 https://github.com/rizetngan/antigravity-harness-bridge
 
-1. Check OS, architecture, Cursor and official Antigravity CLI versions against the tested compatibility range.
+1. Check OS, architecture, Cursor and CLI. The Antigravity desktop app is not the CLI. Check PATH and the official default locations (macOS ~/.local/bin/agy; Windows %LOCALAPPDATA%\agy\bin\agy.exe). Reuse an existing working CLI. If missing, install it directly using the official Google command for this OS instead of merely reporting a missing dependency:
+   macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
+   Windows PowerShell: irm https://antigravity.google/cli/install.ps1 | iex
+   Verify agy --version and agy acp --help using the actual executable path, even if PATH has not refreshed. Report any actual installation or compatibility failure; let me complete official sign-in if required.
 2. Download the latest stable VSIX only from this repository's GitHub Releases and verify its published SHA-256. Stop if the checksum does not match.
 3. Check for an existing Workbench integration. Restore the previous integration before upgrading; preserve conversations and settings. Do not interrupt an active task.
 4. Install the VSIX and open the Antigravity panel. Explain the opt-in Workbench patch and backup before enabling it. Let me confirm any OS authorization; do not bypass security.
@@ -178,6 +221,7 @@ https://github.com/rizetngan/antigravity-harness-bridge
 
 | Situation | Action |
 | --- | --- |
+| Desktop app installed but agy is missing | Check the official default binary location; if absent, install the CLI in step 1 and verify `agy acp --help` |
 | Models do not appear | Check service/account status, refresh the catalogue, and fully restart Cursor after initial integration |
 | Temporarily return to Cursor models | Stop Service |
 | Model is present but requests fail | Reconnect and verify that ACP still exposes the selected model |

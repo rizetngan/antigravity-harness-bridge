@@ -38,7 +38,7 @@ SHA-256（V1.2.0 VSIX）：
 46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb
 ```
 
-需要预先安装 Cursor 和 [Google 官方 Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli)，并使用自己的 Antigravity 账号登录。首次启用原生接入时可能需要系统授权；日常启停不需要管理员权限或重启。
+**仅安装 Antigravity 桌面端还不够。** 本插件需要 Cursor 和独立的 [Google 官方 Antigravity CLI（`agy`）](https://antigravity.google/docs/getting-started?tab=cli)。已有桌面端用户无需重装桌面端；只需补齐 CLI，并通过官方流程登录。缺少 CLI 时，请使用下方自动检测安装命令或 Agent 安装方式。首次启用原生接入时可能需要系统授权；日常启停不需要管理员权限或重启。
 
 ## 核心体验
 
@@ -112,7 +112,49 @@ Cursor 原生适配器涉及版本特定的 Workbench 接入。升级 Cursor 后
 
 ## 使用方法
 
-1. 安装官方 Antigravity CLI，运行 `agy --version` 确认可用，按官方流程登录。
+### 第一步：检测并补齐官方 CLI
+
+Antigravity 桌面应用与 `agy` 是不同的安装组件。插件通过 `agy acp` 调用官方 Agent，而不是启动桌面应用。已安装 CLI 的用户直接复用，不需要重新安装或升级。以下命令仅在检测不到 CLI 时运行 Google 官方安装器，并验证版本及 ACP 命令。
+
+**macOS · Terminal**
+
+```bash
+set -e
+agy_bin="$(command -v agy || true)"
+if [ -z "$agy_bin" ] && [ -x "$HOME/.local/bin/agy" ]; then
+  agy_bin="$HOME/.local/bin/agy"
+fi
+if [ -z "$agy_bin" ]; then
+  curl -fsSL https://antigravity.google/cli/install.sh | bash
+  agy_bin="$HOME/.local/bin/agy"
+fi
+"$agy_bin" --version
+"$agy_bin" acp --help
+```
+
+**Windows · PowerShell**
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$agy = Get-Command agy.exe -ErrorAction SilentlyContinue
+$agyPath = if ($agy) { $agy.Source } else { Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe' }
+if (-not (Test-Path $agyPath)) {
+    irm https://antigravity.google/cli/install.ps1 | iex
+    $agyPath = Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe'
+}
+& $agyPath --version
+if ($LASTEXITCODE -ne 0) { throw 'agy verification failed' }
+& $agyPath acp --help
+if ($LASTEXITCODE -ne 0) { throw 'ACP unavailable' }
+```
+
+官方默认位置：macOS `~/.local/bin/agy`；Windows `%LOCALAPPDATA%\agy\bin\agy.exe`。即使 PATH 尚未刷新，也可通过默认绝对路径运行。若 CLI 安装在自定义位置，请选择实际的 `agy` 可执行文件或将其所在目录加入 PATH。若需要初次登录，运行检测到的 `agy`，按官方交互流程完成登录；已有可用认证直接复用。
+
+[Google 官方 CLI 安装指南](https://antigravity.google/docs/getting-started?tab=cli)
+
+### 第二步：启用 Cursor 接入
+
+1. 确认官方 CLI 和 ACP 可用；如需登录，完成官方登录。
 2. 下载 VSIX，在 Cursor 扩展页菜单选择 **Install from VSIX...**。
 3. 点击状态栏 **Antigravity**，在管理面板选择 **Enable Native Models**（启用原生模型）。
 4. 确认系统授权；完全退出并重新打开 Cursor，使新版 Workbench 接入生效。
@@ -122,12 +164,11 @@ Cursor 原生适配器涉及版本特定的 Workbench 接入。升级 Cursor 后
 
 ### 命令行安装
 
-以下命令安装 V1.2.0 已验证正式版，适用于已经安装 Cursor 和官方 Antigravity CLI 的电脑。命令只安装扩展；首次启用接入仍通过管理面板确认。
+以下命令安装 V1.2.0 已验证正式版。先完成上方 CLI 自动检测与补齐步骤；仅安装桌面端的用户也可直接使用该步骤。命令只安装扩展；首次启用接入仍通过管理面板确认。
 
 **macOS · Terminal**
 
 ```bash
-agy --version
 set -e
 file="/tmp/antigravity-cursor-1.2.0.vsix"
 curl -fL --connect-timeout 15 \
@@ -146,7 +187,6 @@ printf '%s  %s\n' \
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-agy --version
 $file = Join-Path $env:TEMP 'antigravity-cursor-1.2.0.vsix'
 Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.0/antigravity-cursor-1.2.0.vsix' -OutFile $file
 $expected = '46937ff787ea1a7260f6e398baec1f2dae9fae276991381cca82bffee7ce4bbb'
@@ -166,7 +206,10 @@ cursor --install-extension $file --force
 请帮我在这台电脑安装 Antigravity Agent Bridge 最新稳定正式版：
 https://github.com/rizetngan/antigravity-harness-bridge
 
-1. 检查操作系统、CPU 架构、Cursor 和官方 Antigravity CLI 版本。确认是否在已验证范围内，不使用第三方模型代理。
+1. 检查操作系统、CPU 架构、Cursor 与官方 CLI。Antigravity 桌面端不等于 CLI。先检查 PATH，再检查 macOS ~/.local/bin/agy 或 Windows %LOCALAPPDATA%\agy\bin\agy.exe；如果已安装则直接复用，不重复安装。如果缺少 CLI，请直接执行对应系统的 Google 官方安装命令，不要只告诉我缺少依赖：
+   macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
+   Windows PowerShell: irm https://antigravity.google/cli/install.ps1 | iex
+   安装后通过实际绝对路径验证 agy --version 和 agy acp --help；如果 PATH 未刷新，不要误判为安装失败。若仍缺少、ACP 不可用或版本超出已验证范围，说明具体原因；需要登录时由我完成官方认证。
 2. 从本仓库 GitHub Releases 选择最新稳定版 VSIX，使用该版本公布的 SHA-256 校验文件；不一致则停止。
 3. 检查是否存在旧版 Workbench 接入。如需升级，先通过旧版 Restore Cursor 恢复；保留聊天记录和已有设置，不强制终止正在执行的任务。
 4. 通过 Cursor 安装 VSIX，打开 Antigravity 管理面板。启用原生模型前说明需要修改并备份 Workbench 资源，由我确认必要的系统授权。不要绕过安全校验。
@@ -179,6 +222,7 @@ https://github.com/rizetngan/antigravity-harness-bridge
 
 | 情况 | 建议 |
 | --- | --- |
+| 已安装 Antigravity 桌面端，但提示缺少 agy | 按第一步检测官方默认目录；如缺少 CLI，执行官方安装器并验证 `agy acp --help` |
 | 模型没有出现 | 检查账号连接和管理面板状态，刷新模型；首次接入后完整退出再打开 Cursor |
 | 仅希望暂时使用 Cursor 原生模型 | 点击停止服务，无需卸载 |
 | 模型已出现但无法调用 | 在面板重连账号，检查该模型是否仍由 ACP 提供 |
