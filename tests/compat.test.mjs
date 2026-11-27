@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { anchorCounts, patchSource, CursorCompatibility, START, END, EXTENSION_ID, nativeCompatibility, patchExecutionLocality } from "../src/cursor/compat.ts";
+import { anchorCounts, patchSource, CursorCompatibility, START, END, EXTENSION_ID, nativeCompatibility, patchExecutionLocality, rendererRevision } from "../src/cursor/compat.ts";
 
 const source = `
 function makeClient(service,transport){return createClient(service,transport)}
@@ -307,4 +307,24 @@ test("optional native locality adapter follows resolved authority, independent o
   assert.equal(f(null,null,null,opts,null,null,null,"ssh-remote+host").agentHostSessionOptionsBase.__agLocalExecution,false);
   assert.equal(patchExecutionLocality(shape+shape),shape+shape);
  }
+});
+
+test("diagnose mixed embedded renderer revisions without changing host compatibility",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"agy-renderer-revisions-"));
+ try{
+  const app=join(root,"resources","app"),workbench=join(app,"out","vs","workbench");
+  mkdirSync(workbench,{recursive:true});
+  const runtime=n=>`globalThis.__antigravityBridge = { version: ${n}, mergeModels(){} };`;
+  const rendererFile=join(root,"renderer.js");writeFileSync(rendererFile,runtime(18));
+  const fixture=n=>START+"\n"+runtime(n)+"\n"+END+"\n"+source;
+  writeFileSync(join(workbench,"workbench.desktop.main.js"),fixture(18));
+  writeFileSync(join(workbench,"workbench.glass.main.js"),fixture(17));
+  const compat=new CursorCompatibility(app,join(root,"backups"),rendererFile,{syntheticFixture:true});
+  const result=await compat.runtimeRevisions();
+  assert.equal(result.outdated,true);assert.equal(result.expected,18);
+  assert.deepEqual(result.installed.map(t=>[t.kind,t.revision]),[["desktop",18],["glass",17]]);
+  assert.equal(rendererRevision(fixture(17)),17);
+  writeFileSync(join(workbench,"workbench.glass.main.js"),fixture(18));
+  assert.equal((await compat.runtimeRevisions()).outdated,false);
+ }finally{rmSync(root,{recursive:true,force:true});}
 });

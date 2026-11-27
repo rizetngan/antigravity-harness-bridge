@@ -331,7 +331,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   panelEntry.show();
   context.subscriptions.push(panelEntry);
   const remoteStatusSync = setInterval(() => {
-    void gateway.syncRemoteStatus().finally(() => panel.publish());
+    const sync = patch === "enabled" && !reload ? gateway.maintainSharedGateway() : gateway.syncRemoteStatus();
+    void sync.finally(() => panel.publish());
   }, 1200);
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(remoteStatusSync)));
   context.subscriptions.push(new vscode.Disposable(() => {
@@ -444,6 +445,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const patchState = await readPatchState(paths.service);
       patch = patchState;
       output.appendLine("Workbench integration: " + patchState);
+      const revisions = await paths.service.runtimeRevisions();
+      output.appendLine("Embedded renderer revisions: " + revisions.installed.map(t => t.kind + "=" + (t.revision ?? "unknown")).join(", ") + "; expected=" + revisions.expected);
       output.appendLine("Native picker: controlled by Cursor. ACP connection and patch presence do not establish native model selection or a completed native turn.");
       output.appendLine("App root: " + paths.appRoot);
       output.appendLine("Official CLI: " + cli.status + (cli.version ? " · " + cli.version : "") + (cli.detail ? " · " + cli.detail : ""));
@@ -616,8 +619,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     patch = patchState; panel.publish();
     await checkCli();
     if (patchState === "enabled") {
+      // An extension update does not replace already embedded Workbench JS.
+      // Keep existing service usable and surface a precise recovery path.
+      void paths.service.runtimeRevisions().then(revisions => {
+        if (!revisions.outdated) return;
+        output.appendLine("Installed Workbench renderer is older/different: " + revisions.installed.map(t => t.kind + "=" + (t.revision ?? "unknown")).join(", ") + "; expected=" + revisions.expected);
+        void vscode.window.showWarningMessage("当前 Workbench 接入代码与插件版本不一致。请先恢复 Cursor，重启后重新启用接入。", "恢复 Cursor").then(choice => {
+          if (choice === "恢复 Cursor") void vscode.commands.executeCommand("antigravityCursor.restoreCursor");
+        });
+      }).catch(() => undefined);
       const paused = await gateway.isPaused();
-      const config = await gateway.start(paused);
+      const config = await gateway.start(paused, false, true);
       if (!gateway.running) {
         output.appendLine("Antigravity service is paused; Cursor native models are active.");
         return;

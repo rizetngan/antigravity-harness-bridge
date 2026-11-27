@@ -6,6 +6,8 @@
 - Preserve native worktree and ordered multi-root selection, bind ACP sessions and tool callback roots to the current conversation, and resolve relative paths against its cwd.
 - Recreate only the ACP session when its execution scope changes, importing the existing visible history.
 - Keep ordinary no-project chat and do not substitute unrelated local directories for unknown or remote environments.
+- Recover the existing authenticated shared gateway when its owning IDE or Glass window closes; preserve the user pause state.
+- Diagnose outdated embedded Workbench renderer revisions after VSIX upgrades without blocking normal use.
 - No new project UI, gateway per project, or changes to model selection and service controls.
 
 

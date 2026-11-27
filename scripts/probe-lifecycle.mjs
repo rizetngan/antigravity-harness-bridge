@@ -77,6 +77,41 @@ try {
   await new Promise((resolve,reject)=>{occupied.once("error",reject);occupied.listen(patchedLocation.port,"127.0.0.1",resolve);});
   const patched = new AntigravityGateway(output,profile,patchedApp);extra.push(patched);
   await assert.rejects(patched.start(false,true),/EADDRINUSE/);
+  // Same real listener with two participating window hosts. Explicitly close
+  // its owner, then let the surviving window recover it through the normal tick.
+  const handoffApp = path.join(temp,"Handoff","resources","app");
+  const ide = new AntigravityGateway(output,profile,handoffApp);extra.push(ide);
+  const glass = new AntigravityGateway(output,profile,handoffApp);extra.push(glass);
+  glass.refreshCatalogue=async()=>[];
+  const handoff = await ide.start();
+  assert.deepEqual(await glass.start(false,false,true),handoff);
+  assert.equal(glass.panelStatus.borrowed,true);
+  ide.dispose();
+  for(let i=0;i<15 && (!glass.running || glass.panelStatus.borrowed);i++){
+    await glass.maintainSharedGateway();
+    await new Promise(r=>setTimeout(r,100));
+  }
+  assert.equal(glass.running,true);
+  assert.equal(glass.panelStatus.borrowed,false);
+  assert.deepEqual(glass.getConfig(),handoff);
+  assert.equal((await health(handoff)).status,200);
+  console.log("PASS: IDE owner closed; surviving Agents host recovered same listener.");
+  await glass.stop();
+  const reopenedIde = new AntigravityGateway(output,profile,handoffApp);extra.push(reopenedIde);
+  assert.deepEqual(await reopenedIde.start(true,false,true),handoff);
+  assert.equal(reopenedIde.running,false);
+  assert.equal(reopenedIde.panelStatus.borrowed,true);
+  glass.dispose();
+  for(let i=0;i<15 && reopenedIde.panelStatus.borrowed;i++){
+    await reopenedIde.maintainSharedGateway();
+    await new Promise(r=>setTimeout(r,100));
+  }
+  assert.equal(reopenedIde.running,false);
+  assert.equal(reopenedIde.panelStatus.borrowed,false);
+  assert.equal((await health(handoff)).status,200);
+  assert.equal((await fetch(handoff.url+"/mode",{headers:{Authorization:"Bearer "+handoff.token}}).then(r=>r.json())).enabled,false);
+  assert.deepEqual(await reopenedIde.start(),handoff);
+  console.log("PASS: Agents owner closed; surviving IDE kept explicit pause and could restart.");
   console.log("PASS: real occupied port, fresh endpoint selection, persistent lookup, same-profile reuse, different-profile rejection, installed Workbench endpoint protected");
   console.log("PASS: start / stop / restart / authenticated paused control listener, no ACP routes / same-app profile rejection / independent app credentials / unrelated service preserved");
 } finally {

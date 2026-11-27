@@ -118,6 +118,14 @@ export function hasBridgeMarkers(source: string): boolean {
   return source.includes(START) || source.includes(END) || source.includes("__antigravityBridge") || /\/\* ANTIGRAVITY_[A-Z_]+ \*\//.test(source);
 }
 
+// Runtime revision is diagnostic metadata, never a host version gate.
+export function rendererRevision(source: string): number | undefined {
+  const end = source.startsWith(START) ? source.indexOf(END) : -1;
+  const body = end >= 0 ? source.slice(START.length, end) : source;
+  const match = /globalThis\.__antigravityBridge\s*=\s*\{\s*version:\s*(\d+)\b/.exec(body);
+  return match ? Number(match[1]) : undefined;
+}
+
 export function digest(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -328,6 +336,16 @@ export class CursorCompatibility {
       result.push({ kind: target.kind, file: target.file, ...(this.options.syntheticFixture ? anchorCounts(source) : nativeCompatibility(source)) });
     }
     return result;
+  }
+
+  async runtimeRevisions(): Promise<{ expected?: number; installed: Array<{ kind: string; revision?: number }>; outdated: boolean }> {
+    const expected = rendererRevision(await fs.readFile(this.rendererPath, "utf8"));
+    const installed = [];
+    for (const target of this.targets) {
+      const source = await fs.readFile(target.path, "utf8");
+      if (source.startsWith(START)) installed.push({ kind: target.kind, revision: rendererRevision(source) });
+    }
+    return { expected, installed, outdated: expected !== undefined && installed.some(t => t.revision !== expected) };
   }
 
   // Restoration only needs to know whether our own modifications remain.

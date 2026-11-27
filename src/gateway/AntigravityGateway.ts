@@ -97,6 +97,8 @@ export class AntigravityGateway {
   private readonly sessions: SessionStore;
   private readonly profileId: string;
   private borrowedGateway = false;
+  private participated = false;
+  private maintenance?: Promise<void>;
   private paused = true;
   private borrowedConnected = false;
   private borrowedVariants = 0;
@@ -152,6 +154,7 @@ export class AntigravityGateway {
     this.token = await this.loadOrCreateToken();
     if (!(await this.existingGatewayIsHealthy())) { this.token = ""; return false; }
     this.borrowedGateway = true;
+    this.participated = true;
     this.output.appendLine("Attached to the shared Antigravity gateway already running in another Cursor window.");
     await this.syncRemoteStatus();
     return this.borrowedGateway;
@@ -198,11 +201,11 @@ export class AntigravityGateway {
     } finally { this.stopping = false; }
   }
 
-  async start(paused = false, allowAlternatePort = false): Promise<GatewayConfig> {
+  async start(paused = false, allowAlternatePort = false, preserveIntent = false): Promise<GatewayConfig> {
     if (this.disposed || this.stopping) throw new Error("Antigravity service is stopping or disposed.");
     if (this.borrowedGateway) {
       if (await this.existingGatewayIsHealthy()) {
-        if (!paused) await this.remoteControl("start");
+        if (!preserveIntent && !paused) await this.remoteControl("start");
         await this.syncRemoteStatus();
         return this.config();
       }
@@ -216,6 +219,7 @@ export class AntigravityGateway {
       this.token = "";
     }
     if (this.server && this.token) {
+      if (preserveIntent) return this.config();
       await this.setPaused(paused);
       this.paused = paused;
       this.revision += 1;
@@ -230,7 +234,9 @@ export class AntigravityGateway {
       retries: { retries: 6, minTimeout: 100, maxTimeout: 500 },
     });
     try {
+      if (this.disposed || this.stopping) throw new Error("Antigravity service is stopping or disposed.");
       if (this.server && this.token) {
+        if (preserveIntent) return this.config();
         await this.setPaused(paused);
         this.paused = paused;
         this.revision += 1;
@@ -259,7 +265,8 @@ export class AntigravityGateway {
           const health = await this.readExistingGatewayHealth();
           if (health?.profileId === this.profileId && health.ok === true) {
             this.borrowedGateway = true;
-            if (!paused) await this.remoteControl("start");
+            this.participated = true;
+            if (!preserveIntent && !paused) await this.remoteControl("start");
             await this.syncRemoteStatus();
             this.output.appendLine("Reusing the authenticated ACP gateway started by another window of this profile.");
             return this.config();
@@ -278,9 +285,13 @@ export class AntigravityGateway {
           this.port = address.port;
           this.output.appendLine("Preferred local port occupied; assigned an available port for the new integration.");
         }
-        await this.setPaused(paused);
+        // On ownership transfer, read the last explicit user intent. Do not
+        // rewrite it or turn a paused integration back on.
+        if (preserveIntent) paused = await this.isPaused();
+        else await this.setPaused(paused);
         this.paused = paused;
         this.server = server;
+        this.participated = true;
         this.output.appendLine("Local ACP gateway listening at http://" + HOST + ":" + this.port);
       } catch (error) {
         server.close();
@@ -371,6 +382,24 @@ export class AntigravityGateway {
   getConfig(): GatewayConfig {
     if (!this.running || !this.token) throw new Error("Antigravity gateway has not started.");
     return this.config();
+  }
+
+  // The shared listener belongs to an extension host, not a window type.
+  // Recover it if that host exits while another participating window is open.
+  // Never choose another port, change account/profile, or override user pause.
+  maintainSharedGateway(): Promise<void> {
+    if (this.maintenance) return this.maintenance;
+    if (!this.participated || this.disposed || this.stopping) return Promise.resolve();
+    this.maintenance = (async () => {
+      await this.syncRemoteStatus();
+      if (this.disposed || this.stopping || this.server || this.borrowedGateway) return;
+      try {
+        await this.start(await this.isPaused(), false, true);
+        this.output.appendLine("Shared ACP gateway recovered after its previous window closed.");
+        if (this.running && !this.borrowedGateway) void this.refreshCatalogue().catch(() => undefined);
+      } catch { /* a closing or competing host may still own the port; retry on next tick */ }
+    })().finally(() => { this.maintenance = undefined; });
+    return this.maintenance;
   }
 
   async syncRemoteStatus(): Promise<void> {
