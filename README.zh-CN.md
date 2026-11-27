@@ -28,13 +28,13 @@ Antigravity Agent Bridge 是围绕 Google 官方 Antigravity CLI 和 Agent Clien
 
 > **V1.2.1 验收结果：** Windows x64 的 Cursor 3.28.7、3.32.4 原生模型选择、Hydrogen Low 真实对话与启停已通过。双平台 CLI 从零安装、54 项自动化测试及真实资源补丁与恢复均通过。macOS 3.28.7 延续已实机验证的原生适配器，V1.2.1 网关也通过真实 Hydrogen Low 调用；macOS 3.32.4 使用正式发行 VSIX，已通过 Hydrogen Low 原生真实对话、启停与同会话上下文连续性验收。模型执行使用 Antigravity 账号，保留宿主原生选择器的权限策略。
 
-> **V1.2.2 路径修复：** Windows 盘符和目录大小写、斜杠、末尾分隔符不再导致实例识别错误；复用旧版恢复记录和服务端口。Windows 实机 57 项测试通过，Cursor 3.32.4 真实资源副本安装与恢复通过；macOS 56 项测试通过，Windows 专属测试按平台跳过。
+> **V1.2.3:** 减少非必要校验，优化恢复、失效安装锁、内置 Node 复用与新接入端口选择。Windows 71 项自动化测试通过，Cursor 3.32.4 真实资源副本安装、恢复及服务启停验证通过。本版未复测 macOS 实机或原生对话全流程。
 
 ## 下载安装
 
-**V1.2.2 正式版** · Windows x64 / macOS Apple Silicon · 已验证宿主版本见兼容矩阵 · CLI 1.5.18 已测试
+**V1.2.3 正式版** · Windows x64 / macOS Apple Silicon · 已验证宿主版本见兼容矩阵 · CLI 1.5.18 已测试
 
-**[下载 VSIX（双平台通用）](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix)** · [发布说明](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.2) · [全部版本](https://github.com/rizetngan/antigravity-harness-bridge/releases)
+**[下载 VSIX（双平台通用）](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.3/antigravity-cursor-1.2.3.vsix)** · [发布说明](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.3) · [全部版本](https://github.com/rizetngan/antigravity-harness-bridge/releases)
 
 SHA-256：如需校验，请参考正式发布页的安装包摘要。
 
@@ -116,7 +116,7 @@ Cursor 原生适配器涉及版本特定的 Workbench 接入。升级 Cursor 后
 
 ## 使用方法
 
-**图形化快速安装（V1.2.2）：** 安装 VSIX → 打开 Antigravity 管理面板 → 缺少 CLI 时点击「安装并连接」，已有 CLI 自动识别 → 按需登录官方账号 → 启用原生模型 → 完全退出并重新打开 Cursor → 启动服务。下方命令行方式可用于提前安装依赖。
+**图形化快速安装（V1.2.3）：** 安装 VSIX → 打开 Antigravity 管理面板 → 缺少 CLI 时点击「安装并连接」，已有 CLI 自动识别 → 按需登录官方账号 → 启用原生模型 → 完全退出并重新打开 Cursor → 启动服务。下方命令行方式可用于提前安装依赖。
 
 ### 第一步：检测并补齐官方 CLI
 
@@ -170,15 +170,15 @@ if ($LASTEXITCODE -ne 0) { throw 'ACP unavailable' }
 
 ### 命令行安装
 
-以下命令安装 V1.2.2 正式版。下载摘要可在发布页按需核对。先完成上方 CLI 自动检测与补齐步骤；仅安装桌面端的用户也可直接使用该步骤。命令只安装扩展；首次启用接入仍通过管理面板确认。
+以下命令安装 V1.2.3 正式版。下载摘要可在发布页按需核对。先完成上方 CLI 自动检测与补齐步骤；仅安装桌面端的用户也可直接使用该步骤。命令只安装扩展；首次启用接入仍通过管理面板确认。
 
 **macOS · Terminal**
 
 ```bash
 set -e
-file="/tmp/antigravity-cursor-1.2.2.vsix"
+file="/tmp/antigravity-cursor-1.2.3.vsix"
 curl -fL --connect-timeout 15 \
-  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix \
+  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.3/antigravity-cursor-1.2.3.vsix \
   -o "$file"
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
   --install-extension "$file" --force
@@ -190,8 +190,8 @@ curl -fL --connect-timeout 15 \
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.2.vsix'
-Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix' -OutFile $file
+$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.3.vsix'
+Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.3/antigravity-cursor-1.2.3.vsix' -OutFile $file
 cursor --install-extension $file --force
 ```
 
@@ -210,7 +210,7 @@ https://github.com/rizetngan/antigravity-harness-bridge
    macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
    Windows PowerShell: & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1'))) --skip-path --skip-aliases
    安装后通过实际绝对路径验证 agy --version 和 agy acp --help；如果 PATH 未刷新，不要误判为安装失败。若仍缺少、ACP 不可用或版本超出已验证范围，说明具体原因；需要登录时由我完成官方认证。
-2. 从本仓库 GitHub Releases 选择最新稳定版 VSIX，使用该版本公布的 SHA-256 校验文件；不一致则停止。
+2. 从本仓库 GitHub Releases 下载最新正式版 VSIX，可按需核对 SHA-256 摘要。
 3. 检查是否存在旧版 Workbench 接入。如需升级，先通过旧版 Restore Cursor 恢复；保留聊天记录和已有设置，不强制终止正在执行的任务。
 4. 通过 Cursor 安装 VSIX，打开 Antigravity 管理面板。启用原生模型前说明需要修改并备份 Workbench 资源，由我确认必要的系统授权。不要绕过安全校验。
 5. 完全退出并重新打开 Cursor；若需登录 Antigravity，由我使用官方登录流程完成。

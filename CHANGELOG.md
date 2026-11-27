@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.3 - Compatibility resilience (candidate)
+## 1.2.3 - Compatibility resilience
 
 - Recover clean host updates without rolling back a newer Cursor; merge only bridge-owned product checksum fields and preflight conflicts before recovery writes.
 - Avoid repeated CLI version probes and stale install locks. Sign-in and model refresh no longer depend on unrelated panel state. Allow confirmed local enablement while offline, keeping the provider paused until explicitly started.

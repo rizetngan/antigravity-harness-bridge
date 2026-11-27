@@ -28,13 +28,13 @@ The first production adapter is **Antigravity for Cursor**, validated on Windows
 
 > **V1.2.1 validation:** Windows x64 on Cursor 3.28.7 and 3.32.4 passed native model selection, Hydrogen Low chat and provider switching. The official CLI clean-install, 54 automated tests and real-resource patch/restore passed on both platforms. macOS 3.28.7 retains the previously live-tested native adapter; the V1.2.1 gateway passed a real Hydrogen Low request. macOS 3.32.4 also passed native Hydrogen Low chat, service stop/start and same-conversation context continuity using the released VSIX. Antigravity model execution uses the Antigravity account; the adapter preserves the host's native picker policies.
 
-> **V1.2.2 path fix:** Windows path case and separator differences no longer split installation identity; existing recovery journals and gateway endpoints are retained. All 57 Windows tests passed, including PowerShell argument passing; real Cursor 3.32.4 resource copy install/restore passed. macOS: 56 passed, one Windows-only test skipped.
+> **V1.2.3:** Reduced unnecessary validation, improved recovery, stale-lock handling, bundled Node reuse and new-install port selection. Windows: 71 automated tests passed, real Cursor 3.32.4 resource install/restore and lifecycle probes passed. macOS retest and full native conversation regression were not performed for this release.
 
 ## Download
 
-**V1.2.2 stable** · Windows x64 / macOS Apple Silicon · See verified host versions below · CLI 1.5.18 tested
+**V1.2.3 stable** · Windows x64 / macOS Apple Silicon · See verified host versions below · CLI 1.5.18 tested
 
-**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.2) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
+**[Download VSIX (both platforms)](https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.3/antigravity-cursor-1.2.3.vsix)** · [Release notes](https://github.com/rizetngan/antigravity-harness-bridge/releases/tag/v1.2.3) · [All releases](https://github.com/rizetngan/antigravity-harness-bridge/releases)
 
 SHA-256: see the release asset digest for optional verification.
 
@@ -115,7 +115,7 @@ Cursor integration depends on version-specific Workbench resources. Recheck comp
 
 ## Installation
 
-**Quick setup (V1.2.2):** Install the VSIX → open the Antigravity management panel → choose Install and Connect if the CLI is missing (existing CLI is reused) → complete official sign-in if requested → Enable Native Models → fully quit and reopen Cursor → Start Service. The terminal steps below are an alternative.
+**Quick setup (V1.2.3):** Install the VSIX → open the Antigravity management panel → choose Install and Connect if the CLI is missing (existing CLI is reused) → complete official sign-in if requested → Enable Native Models → fully quit and reopen Cursor → Start Service. The terminal steps below are an alternative.
 
 ### Step 1: Detect and install the official CLI if needed
 
@@ -169,15 +169,15 @@ Default locations: macOS `~/.local/bin/agy`; Windows `%LOCALAPPDATA%\agy\bin\agy
 
 ### Terminal installation
 
-The following commands install V1.2.2; optional download digest is on the release page. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
+The following commands install V1.2.3; optional download digest is on the release page. Complete the CLI detection and installation step above first, including on machines that only have the desktop app. Initial integration is still confirmed from the management panel.
 
 **macOS**
 
 ```bash
 set -e
-file="/tmp/antigravity-cursor-1.2.2.vsix"
+file="/tmp/antigravity-cursor-1.2.3.vsix"
 curl -fL --connect-timeout 15 \
-  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix \
+  https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.3/antigravity-cursor-1.2.3.vsix \
   -o "$file"
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
   --install-extension "$file" --force
@@ -189,8 +189,8 @@ Adjust the CLI path if Cursor is installed elsewhere. Grant App Management permi
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.2.vsix'
-Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.2/antigravity-cursor-1.2.2.vsix' -OutFile $file
+$file = Join-Path $env:TEMP 'antigravity-cursor-1.2.3.vsix'
+Invoke-WebRequest -UseBasicParsing 'https://github.com/rizetngan/antigravity-harness-bridge/releases/download/v1.2.3/antigravity-cursor-1.2.3.vsix' -OutFile $file
 cursor --install-extension $file --force
 ```
 
@@ -209,7 +209,7 @@ https://github.com/rizetngan/antigravity-harness-bridge
    macOS: curl -fsSL https://antigravity.google/cli/install.sh | bash
    Windows PowerShell: & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://antigravity.google/cli/install.ps1'))) --skip-path --skip-aliases
    Verify agy --version and agy acp --help using the actual executable path, even if PATH has not refreshed. Report any actual installation or compatibility failure; let me complete official sign-in if required.
-2. Download the latest stable VSIX only from this repository's GitHub Releases and verify its published SHA-256. Stop if the checksum does not match.
+2. Download the latest stable VSIX from this repository's GitHub Releases. The published SHA-256 is available for optional verification.
 3. Check for an existing Workbench integration. Restore the previous integration before upgrading; preserve conversations and settings. Do not interrupt an active task.
 4. Install the VSIX and open the Antigravity panel. Explain the opt-in Workbench patch and backup before enabling it. Let me confirm any OS authorization; do not bypass security.
 5. Fully quit and reopen Cursor. Let me complete official Antigravity sign-in if needed.
