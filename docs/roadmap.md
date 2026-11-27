@@ -6,7 +6,7 @@
 
 不追求“所有客户端都用同一种插件”。采用 **ACP 优先、原生适配补齐** 的路线。
 
-![项目升级路线](images/roadmap.svg)
+![项目升级路线](images/roadmap.jpg)
 
 ## Phase 0 — 稳定当前 Cursor Adapter
 

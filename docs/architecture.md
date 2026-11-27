@@ -12,7 +12,7 @@
 
 ## 2. 当前 V1.1.2 实际架构
 
-![当前 Cursor 适配器架构](images/current-cursor-flow.svg)
+![当前 Cursor 适配器架构](images/current-cursor-flow.jpg)
 
 当前代码主要由以下部分构成：
 
@@ -33,7 +33,7 @@
 
 ## 3. 目标多客户端架构
 
-![目标多 Harness 架构](images/target-harness-architecture.svg)
+![目标多 Harness 架构](images/target-harness-architecture.jpg)
 
 ### 上游：Antigravity Runtime
 

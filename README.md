@@ -6,7 +6,7 @@ A multi-harness integration project built around Google's official Antigravity C
 
 [简体中文](README.zh-CN.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Client compatibility](docs/client-compatibility.md)
 
-![Target architecture](docs/images/target-harness-architecture.svg)
+![Target architecture](docs/images/target-harness-architecture.jpg)
 
 ## What this project is
 
@@ -20,7 +20,7 @@ The goal is not to build a replacement agent or a third-party model proxy. Antig
 
 ## Current release
 
-![Current Cursor adapter architecture](docs/images/current-cursor-flow.svg)
+![Current Cursor adapter architecture](docs/images/current-cursor-flow.jpg)
 
 **V1.1.2 · macOS Apple Silicon · tested compatibility baseline: Cursor 3.28.7**
 
@@ -36,7 +36,7 @@ Cursor does not expose a public API for registering arbitrary third-party provid
 
 ## Two connection paths
 
-![ACP direct connection and host adapter paths](docs/images/client-connection-modes.svg)
+![ACP direct connection and host adapter paths](docs/images/client-connection-modes.jpg)
 
 ### 1. ACP-native clients — connect directly
 
@@ -83,7 +83,7 @@ For upgrades from an earlier release, restore the previous Workbench patch befor
 
 ## Product roadmap
 
-![Project roadmap](docs/images/roadmap.svg)
+![Project roadmap](docs/images/roadmap.jpg)
 
 1. **Keep Cursor stable** — preserve the working V1.1.2 adapter and its deterministic recovery.
 2. **Extract the shared core** — separate Antigravity runtime, model catalogue, sessions, normalized events, permissions, and context contracts from Cursor-specific code.

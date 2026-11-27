@@ -6,7 +6,7 @@
 
 [English README](README.md) · [架构说明](docs/architecture.md) · [升级路线](docs/roadmap.md) · [客户端兼容性](docs/client-compatibility.md)
 
-![多客户端目标架构](docs/images/target-harness-architecture.svg)
+![多客户端目标架构](docs/images/target-harness-architecture.jpg)
 
 ## 项目定位
 
@@ -20,7 +20,7 @@
 
 ## 当前已经完成
 
-![当前 Cursor 适配器架构](docs/images/current-cursor-flow.svg)
+![当前 Cursor 适配器架构](docs/images/current-cursor-flow.jpg)
 
 **V1.1.2 · macOS Apple Silicon · 已验证基线 Cursor 3.28.7**
 
@@ -36,7 +36,7 @@ Cursor 没有提供公开 API 来注册任意第三方模型供应商，因此�
 
 ## 两种客户端接入路径
 
-![ACP 直连和原生适配器两种接入方式](docs/images/client-connection-modes.svg)
+![ACP 直连和原生适配器两种接入方式](docs/images/client-connection-modes.jpg)
 
 ### 路径一：客户端原生支持 ACP，直接连接
 
@@ -83,7 +83,7 @@ Cursor 就是第一个实例。后续客户端必须先验证其公开扩展 API
 
 ## 后续升级路线
 
-![项目升级路线](docs/images/roadmap.svg)
+![项目升级路线](docs/images/roadmap.jpg)
 
 1. **保持 Cursor 稳定：** 保留 V1.1.2 已验证适配器及确定性恢复能力。
 2. **抽离通用核心：** 将 Antigravity Runtime、模型目录、会话、标准事件、权限和上下文契约从 Cursor 代码中拆开。
