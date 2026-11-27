@@ -10,7 +10,7 @@ button{font:inherit;cursor:pointer;color:inherit;border:1px solid transparent;bo
 section{padding:14px 0;border-top:1px solid var(--line)}h2{font-size:11px;letter-spacing:.035em;margin:0;font-weight:600}#mainAction{margin-top:10px}#notice{margin-top:9px;font-size:11px;color:var(--vscode-editorWarning-foreground);overflow-wrap:anywhere}.model{padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:6px;align-items:flex-start}.model:last-child{border:0}.model .name{font-size:12px;overflow-wrap:anywhere}.model .effort{font-size:10px;white-space:nowrap;color:var(--muted)}#models{margin-top:5px}.empty{padding:9px 0;font-size:11px;color:var(--muted)}.bottom{display:flex;flex-direction:column;align-items:stretch;gap:4px}.bottom button{text-align:left}.restore{color:var(--vscode-errorForeground)}[hidden]{display:none!important}@media(prefers-reduced-motion:reduce){*,*::after{animation:none!important;transition:none!important}}
 </style></head><body>
 <div class="row hero"><svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3 4 20h4l4-9 4 9h4L12 3Z"/><path d="M3 14c-1-2 3-5 8-7s9-2 10 0c.5 1-1 2-2 3"/></svg><div class="grow"><div class="title">Antigravity</div><div class="muted">for Cursor</div></div><span class="version" id="version"></span></div>
-<div class="status" aria-live="polite"><div class="row"><span id="dot" class="dot"></span><div class="grow"><div id="status" class="title">正在检查</div><div id="detail" class="muted"></div></div><button id="switch" class="switch" role="switch" aria-checked="false" aria-label="服务开关" hidden></button></div><button id="mainAction" class="primary" hidden></button><div id="notice" hidden></div></div>
+<div class="status" aria-live="polite"><div class="row"><span id="dot" class="dot"></span><div class="grow"><div id="status" class="title">正在检查</div><div id="detail" class="muted"></div></div><button id="switch" class="switch" role="switch" aria-checked="false" aria-label="服务开关" hidden></button></div><button id="mainAction" class="primary" hidden></button><div id="notice" hidden></div><button id="checkCli" class="ghost" data-action="checkCli" hidden>重新检测</button></div>
 <section><div class="row"><div class="grow"><h2>Antigravity 账号</h2><div id="account" class="muted">未连接</div></div><button class="secondary" id="login" data-action="login" disabled>登录 / 重连</button></div></section>
 <section><div class="row"><h2 class="grow">可用模型 <span id="count" class="muted"></span></h2><button id="refresh" class="ghost" data-action="refresh" aria-label="刷新模型" title="刷新模型" disabled>↻ 刷新</button></div><div id="models"><div class="empty">连接后加载模型</div></div></section>
 <section class="bottom"><button class="ghost" data-action="logs" id="logs">查看连接状态</button><button class="ghost restore" id="restore" data-action="restore" disabled>恢复原版 Cursor</button></section>
@@ -23,22 +23,27 @@ function render(s){state=s;$("version").textContent="v"+s.version;
 const busy=!!s.pending, enabled=s.patch==="enabled", reload=s.reload, active=s.active>0, owner=!s.borrowed, running=s.running;
 let label="未启用",detail="原生 Cursor",dot="",notice="",action=null,actionText="";
 if(s.patch==="checking"){label="正在检查";detail="";dot="wait"}
-else if(reload){label="需要重载窗口";detail=enabled?"启用后加载原生模型":"完成原版恢复";dot="wait";action="reload";actionText="立即重载"}
+else if(reload){label="需要重新打开 Cursor";detail="完全退出后重新打开";dot="wait";action="reload";actionText="退出 Cursor"}
 else if(s.patch==="partial"||s.patch==="unsupported"){label="需要检查";detail="兼容性状态异常";notice="查看连接状态，必要时恢复原版。"}
-else if(!enabled){action="enable";actionText="启用原生模型"}
+else if(s.cli.status==="checking"){label="正在检测 CLI";detail="";dot="wait"}
+else if(s.cli.status==="installing"){label="正在安装 CLI";detail="官方安装器";dot="wait"}
+else if(s.cli.status==="missing"){label="Antigravity CLI 未安装";detail="桌面端无需重装";action="setup";actionText="安装并连接"}
+else if(s.cli.status==="error"){label="CLI 需要检查";detail="";notice=s.cli.detail||"";action="checkCli";actionText="重新检测 CLI"}
+else if(!enabled&&s.error==="login"){label="需要登录";detail="官方 CLI 已就绪";action="login";actionText="登录 Antigravity"}
+else if(!enabled){detail=s.connected?"账号已连接":"CLI 已就绪";action="enable";actionText="启用原生模型"}
 else if(!running){label="服务已停止";detail="已恢复 Cursor 原生模型"}
 else if(s.connected){label="服务运行中";detail=s.models.length+" 个模型系列 · "+s.variants+" 个变体";dot="on"}
 else if(s.connecting){label="正在连接";detail="加载账号模型";dot="wait"}
 else {label="服务已启动";detail=s.error==="login"?"需要登录":"尚未连接模型目录";notice=s.error==="connection"?"连接失败，请刷新模型或重新登录。":""}
 if(s.borrowed)notice="服务由另一 Cursor 窗口托管，当前面板可以直接管理。";
 if(active)notice="Agent 正在执行任务，完成后可停止或恢复。";
-if(busy){detail=({enable:"正在启用…",start:"正在启动…",stop:"正在停止…",refresh:"正在刷新…",login:"正在打开登录…",restore:"正在恢复…",logs:"正在检查…",reload:"正在重载…"})[s.pending]||detail;dot="wait"}
+if(busy){detail=({setup:"正在安装并连接…",checkCli:"正在检测…",enable:"正在启用…",start:"正在启动…",stop:"正在停止…",refresh:"正在刷新…",login:"正在打开登录…",restore:"正在恢复…",logs:"正在检查…",reload:"正在退出…"})[s.pending]||detail;dot="wait"}
 $("dot").className="dot "+dot;$("status").textContent=label;$("detail").textContent=detail;$("notice").textContent=notice;$("notice").hidden=!notice;
-main=action;$("mainAction").hidden=!action;$("mainAction").textContent=actionText;$("mainAction").disabled=busy;
-$("switch").hidden=!enabled||reload;$("switch").disabled=busy||active;$("switch").setAttribute("aria-checked",String(running));
+main=action;$("mainAction").hidden=!action;$("mainAction").textContent=actionText;$("mainAction").disabled=busy;$("checkCli").hidden=s.cli.status!=="missing"||reload||!["disabled","enabled"].includes(s.patch);$("checkCli").disabled=busy;
+$("switch").hidden=!enabled||reload;$("switch").disabled=busy||active||(!running&&s.cli.status!=="ready");$("switch").setAttribute("aria-checked",String(running));
 $("account").textContent=s.connected?"已连接":s.connecting?"连接中":s.error==="login"?"需要登录":"未连接";
-$("login").disabled=busy||!enabled||!running||reload||active;
-$("refresh").disabled=busy||!enabled||!running||reload||s.connecting;
+$("login").disabled=busy||s.cli.status!=="ready"||(!enabled&&s.patch!=="disabled")||(enabled&&!running)||reload||active;
+$("refresh").disabled=busy||s.cli.status!=="ready"||!enabled||!running||reload||s.connecting;
 $("restore").disabled=busy||reload||active||!owner||!["enabled","partial","unsupported"].includes(s.patch);
 $("logs").disabled=busy;$("count").textContent=s.models.length?String(s.models.length):"";
 const list=$("models");const fragment=document.createDocumentFragment();for(const model of s.models){const row=document.createElement("div");row.className="model";const name=document.createElement("span");name.className="name grow";name.textContent=model.name;row.append(name);if(model.efforts.length){const effort=document.createElement("span");effort.className="effort";effort.textContent=model.efforts.length+" 档";effort.title=model.efforts.map(x=>labels[x]||x).join(" · ");row.append(effort)}fragment.append(row)}

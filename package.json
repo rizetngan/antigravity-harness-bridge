@@ -2,7 +2,7 @@
   "name": "antigravity-cursor",
   "displayName": "Antigravity for Cursor",
   "description": "Cursor adapter for Antigravity Agent Bridge. Exposes Antigravity models in Cursor's native model picker.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "publisher": "rizetngan",
   "license": "UNLICENSED",
@@ -46,6 +46,14 @@
       {
         "command": "antigravityCursor.restoreCursor",
         "title": "Antigravity: Restore Cursor"
+      },
+      {
+        "command": "antigravityCursor.setupCli",
+        "title": "Antigravity: Install and Connect CLI"
+      },
+      {
+        "command": "antigravityCursor.checkCli",
+        "title": "Antigravity: Check CLI"
       }
     ],
     "viewsContainers": {
@@ -62,7 +70,7 @@
         {
           "type": "webview",
           "id": "antigravityCursor.management",
-          "name": "\u7ba1\u7406\u9762\u677f"
+          "name": "管理面板"
         }
       ]
     }
@@ -76,7 +84,7 @@
     "probe:cursor-context": "node --experimental-strip-types scripts/probe-cursor-context.mjs",
     "install:test-copy": "node --experimental-strip-types scripts/install-test-copy.mjs",
     "restore:test-copy": "node --experimental-strip-types scripts/restore-test-copy.mjs",
-    "package:vsix": "node -e \"require('fs').mkdirSync('releases',{recursive:true})\" && npx --yes @vscode/vsce package --no-dependencies --out releases/antigravity-cursor-1.2.0.vsix",
+    "package:vsix": "node -e \"require('fs').mkdirSync('releases',{recursive:true})\" && npx --yes @vscode/vsce package --no-dependencies --out releases/antigravity-cursor-1.2.1.vsix",
     "verify:test-copy": "node --experimental-strip-types scripts/verify-test-copy.mjs",
     "probe:gateway": "bash scripts/run-gateway-probe.sh",
     "probe:extension-activation": "node scripts/probe-extension-activation.mjs",

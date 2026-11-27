@@ -5,6 +5,7 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { platformPaths, resolveAgyExecutable, resolveNodeExecutable, probeDirectoryWritable, powershellQuote } from "./platform.ts";
 import path from "node:path";
+import { ensureCli, inspectCli, type CliResult } from "./cliSetup.js";
 import { AntigravityGateway } from "./gateway/AntigravityGateway.js";
 import { CursorCompatibility } from "./cursor/compat.js";
 import { ManagementView, VIEW_ID, type PatchState } from "./ui/ManagementView.js";
@@ -48,8 +49,8 @@ async function readPatchState(service: CursorCompatibility): Promise<"enabled" |
 }
 
 async function offerReload(message: string): Promise<void> {
-  void vscode.window.showInformationMessage(message, "立即重载窗口").then(choice => {
-    if (choice === "立即重载窗口") void vscode.commands.executeCommand("workbench.action.reloadWindow");
+  void vscode.window.showInformationMessage(message, "退出 Cursor").then(choice => {
+    if (choice === "退出 Cursor") void vscode.commands.executeCommand("workbench.action.quit");
   });
 }
 
@@ -73,7 +74,7 @@ async function openAgyLoginTerminal(
 
   const executable = resolveAgyExecutable();
   const windows = process.platform === "win32";
-  const probe = spawnSync(executable, ["--version"], { encoding: "utf8", windowsHide: true });
+  const probe = spawnSync(executable, ["--version"], { encoding: "utf8", windowsHide: true, timeout: 15000 });
   if (probe.error || probe.status !== 0) throw new Error("未找到可用的 Antigravity CLI（agy），请先安装官方 CLI。");
   const terminal = vscode.window.createTerminal({
     name: "Antigravity Sign In",
@@ -100,9 +101,9 @@ async function openAgyLoginTerminal(
   context.subscriptions.push(closeListener);
 
   terminal.show(true);
-  terminal.sendText((windows ? "& " + powershellQuote(executable) : shellQuote(executable)) + " acp --login");
+  terminal.sendText((windows ? "& " + powershellQuote(executable) + " acp --login; if ($LASTEXITCODE -eq 0) { exit }" : shellQuote(executable) + " acp --login && exit"));
   void vscode.window.showInformationMessage(
-    "请按终端提示完成 Google 账号登录。登录命令退出后关闭终端标签，插件会自动刷新模型目录。",
+    "请按终端提示完成 Google 账号登录。成功后终端自动关闭，插件会刷新模型目录。",
   );
 }
 
@@ -313,7 +314,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   activeGateway = gateway;
   let patch: PatchState = "checking";
   let reload = false;
-  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, version: "1.2.0" }), context.asAbsolutePath("media/management.html"));
+  let cli: CliResult = { status: "checking" };
+  const panel = new ManagementView(() => ({ ...gateway.panelStatus, patch, reload, cli, version: "1.2.1" }), context.asAbsolutePath("media/management.html"));
   context.subscriptions.push(panel, vscode.window.registerWebviewViewProvider(VIEW_ID, panel, { webviewOptions: { retainContextWhenHidden: false } }));
   // Cursor can hide the Activity Bar in its Agent-oriented layout. The native
   // status item provides the same one-click entry without changing that layout.
@@ -332,6 +334,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     gateway.dispose();
     if (activeGateway === gateway) activeGateway = undefined;
   }));
+
+  let setupPending = false;
+  let checking: Promise<CliResult> | undefined;
+  const checkCli = async (): Promise<CliResult> => {
+    if (checking) return checking;
+    if (setupPending) return cli;
+    cli = { status: "checking" }; panel.publish();
+    checking = inspectCli().catch(() => ({ status: "error" as const, detail: "CLI 检测失败，请检查安装环境。" }));
+    try { cli = await checking; return cli; }
+    finally { checking = undefined; panel.publish(); }
+  };
+  const requireCli = async (): Promise<boolean> => {
+    if (setupPending) return false;
+    const state = await checkCli();
+    if (state.status === "ready") return true;
+    void vscode.window.showWarningMessage(state.status === "missing" ? "缺少 Antigravity CLI，请在管理面板点击「安装并连接」。" : state.detail || "CLI 不可用，请重新检测。");
+    return false;
+  };
+  const setupCommand = vscode.commands.registerCommand("antigravityCursor.setupCli", async () => {
+    if (setupPending || checking || reload || gateway.panelStatus.active || !["disabled", "enabled"].includes(patch)) return;
+    setupPending = true;
+    try {
+      cli = { status: "installing" }; panel.publish();
+      cli = await ensureCli();
+      panel.publish();
+      if (cli.status !== "ready") throw new Error(cli.detail || "CLI 未就绪");
+      output.appendLine("Antigravity CLI verified: " + (cli.version || "ready"));
+      await gateway.start();
+      await context.globalState.update("servicePaused", false);
+      try {
+        const models = await gateway.refreshCatalogue(true);
+        if (!models.length) throw new Error("Antigravity 账号未返回可用模型。");
+        void vscode.window.showInformationMessage("Antigravity 已连接 · " + models.length + " 个模型系列" + (patch === "disabled" ? "，现在可以启用原生模型。" : ""));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isAuthenticationRequired(message)) await openAgyLoginTerminal(context, gateway, output);
+        else throw error;
+      }
+    } catch (error) {
+      if (cli.status === "installing") {
+        cli = await inspectCli().catch(() => ({ status: "error" as const }));
+        if (cli.status !== "ready") cli = { status: "error", detail: "安装未完成，请重新检测 CLI；如仍缺少，可重试官方安装。" };
+      }
+      output.appendLine("Antigravity setup failed: " + (error instanceof Error ? error.message : String(error)));
+      void vscode.window.showErrorMessage("Antigravity 安装或连接未完成，请查看连接状态后重试。");
+    } finally { setupPending = false; panel.publish(); }
+  });
+  context.subscriptions.push(setupCommand, vscode.commands.registerCommand("antigravityCursor.checkCli", async () => { if (!setupPending) await checkCli(); }));
 
   const refreshCommand = vscode.commands.registerCommand("antigravityCursor.refreshModels", async (options?: { fromPanel?: boolean }) => {
     try {
@@ -372,6 +422,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const signInCommand = vscode.commands.registerCommand("antigravityCursor.signIn", async () => {
     try {
+      if (!(await requireCli())) return;
+      if (!gateway.running && patch === "disabled") await gateway.start();
       if (!gateway.running) throw new Error("请先启动 Antigravity 服务。");
       await openAgyLoginTerminal(context, gateway, output);
     } catch (error) {
@@ -390,6 +442,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       patch = patchState;
       output.appendLine("Workbench integration: " + patchState);
       output.appendLine("App root: " + paths.appRoot);
+      output.appendLine("Official CLI: " + cli.status + (cli.version ? " · " + cli.version : "") + (cli.detail ? " · " + cli.detail : ""));
       try {
         output.appendLine("Gateway: " + gateway.getConfig().url);
         output.appendLine(gateway.panelStatus.borrowed
@@ -415,6 +468,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(statusCommand);
 
   const enableCommand = vscode.commands.registerCommand("antigravityCursor.enableIntegration", async () => {
+    if (setupPending || !(await requireCli())) return;
     const confirmation = await vscode.window.showWarningMessage(
       "启用后会在当前 Cursor 安装目录内修改 Desktop / Glass Workbench 资源和 product.json，让 Antigravity 模型进入原生模型选择器。原文件会先备份，可随时使用“恢复 Cursor”撤销；不会替换 Cursor 程序或修改其源码。",
       { modal: true },
@@ -437,6 +491,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       const config = await gateway.start();
+      // Confirm the official ACP account can return models before modifying Cursor.
+      try {
+        const models = await gateway.refreshCatalogue(true);
+        if (!models.length) throw new Error("Antigravity 账号未返回可用模型。");
+      } catch (error) {
+        if (isAuthenticationRequired(error instanceof Error ? error.message : String(error))) {
+          await openAgyLoginTerminal(context, gateway, output);
+          panel.publish();
+          return;
+        }
+        throw error;
+      }
       const plan = await paths.service.plan(config);
       if (!plan.targets.length) throw new Error("没有可安装的 Workbench 目标文件。");
       const writable = await canWriteDirectory(plan.targets[0].path);
@@ -453,7 +519,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await context.globalState.update("servicePaused", false);
       output.appendLine("Backups: " + paths.storagePath);
       patch = "enabled"; reload = true; panel.publish();
-      await offerReload("Antigravity 原生模型接入已启用。重载窗口后即可加载模型目录。");
+      await offerReload("Antigravity 原生模型接入已启用。请完全退出并重新打开 Cursor。");
     } catch (error) {
       try {
         const currentState = await readPatchState(createCompatibility(context, true).service);
@@ -470,6 +536,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(enableCommand);
 
   const startService = vscode.commands.registerCommand("antigravityCursor.startService", async () => {
+    if (setupPending || !(await requireCli())) return;
     try {
       const state = await readPatchState(createCompatibility(context, true).service);
       if (state !== "enabled") throw new Error("请先启用原生模型接入。");
@@ -480,6 +547,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     } catch (error) { void vscode.window.showErrorMessage("启动失败：" + (error instanceof Error ? error.message : String(error))); }
   });
   const stopService = vscode.commands.registerCommand("antigravityCursor.stopService", async () => {
+    if (setupPending) return;
     try {
       await gateway.stop();
       await context.globalState.update("servicePaused", true);
@@ -489,6 +557,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(startService, stopService);
 
   const restoreCommand = vscode.commands.registerCommand("antigravityCursor.restoreCursor", async () => {
+    if (setupPending) return;
     const confirmation = await vscode.window.showWarningMessage(
       "将使用本扩展保存的备份恢复当前 Cursor 的 Workbench 资源和 product.json，移除 Antigravity 原生模型接入。不会删除 Cursor 设置、项目文件或对话记录。",
       { modal: true },
@@ -518,7 +587,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       output.appendLine("Cursor Workbench restored from the verified original backup.");
       patch = "disabled"; reload = true; panel.publish();
-      await offerReload("Cursor 已恢复到启用 Antigravity 之前的 Workbench 状态。");
+      await offerReload("Cursor 已恢复原始 Workbench。请完全退出并重新打开 Cursor。");
     } catch (error) {
       const code = (error as NodeJS.ErrnoException)?.code;
       const message = error instanceof Error ? error.message : String(error);
@@ -539,6 +608,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     output.appendLine("Standalone recovery tool: " + recoveryTool);
     const patchState = await readPatchState(paths.service);
     patch = patchState; panel.publish();
+    await checkCli();
     if (patchState === "enabled") {
       const paused = await gateway.isPaused();
       const config = await gateway.start(paused);
@@ -550,6 +620,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       output.appendLine("Antigravity integration enabled.");
       output.appendLine("Local gateway ready: " + config.url);
       output.appendLine("Waiting for Cursor to request the Antigravity model catalogue.");
+      if (cli.status !== "ready") return;
       void gateway.refreshCatalogue().catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
         output.appendLine("Initial Antigravity catalogue refresh failed: " + message);

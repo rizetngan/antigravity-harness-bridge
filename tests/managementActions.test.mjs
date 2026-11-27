@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { allowedAction, actions } from "../src/ui/managementActions.ts";
-const base={patch:"disabled",reload:false,version:"1.1.0",running:false,connected:false,connecting:false,models:[],variants:0,active:0,borrowed:false};
+const base={patch:"disabled",reload:false,version:"1.2.1",cli:{status:"ready"},running:false,connected:false,connecting:false,models:[],variants:0,active:0,borrowed:false};
 test("first enable, reload and restore have separate action states",()=>{
  assert.equal(allowedAction("enable",base),true);
  assert.equal(allowedAction("start",base),false);
@@ -36,4 +36,15 @@ test("active tasks are protected while shared gateways remain remotely manageabl
  assert.equal(allowedAction("stop",{...borrowed,active:1}),false);
  for(const k of ["__proto__","constructor","workbench.action.reloadWindow",null,{}])assert.equal(allowedAction(k,running),false);
  assert.equal(actions.restore,"antigravityCursor.restoreCursor");
+});
+
+test("missing CLI gates native enable, start and login; restore stays available",()=>{
+ const missing={...base,cli:{status:"missing"}};
+ assert.equal(allowedAction("setup",missing),true);
+ assert.equal(allowedAction("enable",missing),false);
+ assert.equal(allowedAction("start",{...missing,patch:"enabled"}),false);
+ assert.equal(allowedAction("restore",{...missing,patch:"enabled"}),true);
+ assert.equal(allowedAction("setup",{...missing,active:1}),false);
+ assert.equal(allowedAction("checkCli",{...base,cli:{status:"error"}}),true);
+ assert.equal(allowedAction("setup",base),false);
 });
