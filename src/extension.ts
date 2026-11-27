@@ -483,7 +483,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try {
       await gateway.stop();
       await context.globalState.update("servicePaused", true);
-      void vscode.window.showInformationMessage("Antigravity 服务已停止，模型选择和对话历史仍保留。重新使用前请执行 Start Service。");
+      void vscode.window.showInformationMessage("Antigravity 服务已停止，已恢复 Cursor 原生模型。对话历史保留。");
     } catch (error) { void vscode.window.showErrorMessage("停止失败：" + (error instanceof Error ? error.message : String(error))); }
   });
   context.subscriptions.push(startService, stopService);
@@ -541,22 +541,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     patch = patchState; panel.publish();
     if (patchState === "enabled") {
       const paused = await gateway.isPaused();
-      if (paused) {
-        output.appendLine("Antigravity service is paused. Run Antigravity: Start Service to resume.");
+      const config = await gateway.start(paused);
+      if (!gateway.running) {
+        output.appendLine("Antigravity service is paused; Cursor native models are active.");
         return;
       }
-      if (context.globalState.get<boolean>("servicePaused", false)) {
-        if (!(await gateway.attachExisting())) {
-          output.appendLine("Antigravity service is stopped. Run Antigravity: Start Service to resume.");
-          return;
-        }
-        await context.globalState.update("servicePaused", false);
-        output.appendLine("Attached to the Antigravity service already running in another Cursor window.");
-      } else {
-        const config = await gateway.start();
-        output.appendLine("Antigravity integration enabled.");
-        output.appendLine("Local gateway ready: " + config.url);
-      }
+      await context.globalState.update("servicePaused", false);
+      output.appendLine("Antigravity integration enabled.");
+      output.appendLine("Local gateway ready: " + config.url);
       output.appendLine("Waiting for Cursor to request the Antigravity model catalogue.");
       void gateway.refreshCatalogue().catch((error) => {
         const message = error instanceof Error ? error.message : String(error);

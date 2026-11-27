@@ -22,14 +22,14 @@
 
 ![当前 Cursor 适配器架构](docs/images/current-cursor-flow.jpg)
 
-**V1.1.2 · macOS Apple Silicon · 已验证基线 Cursor 3.28.7**
+**V1.2.0 · Windows x64 + macOS Apple Silicon · 已验证基线 Cursor 3.28.7**
 
 - 通过官方 Antigravity CLI / ACP 获取账号实时模型目录。
 - Antigravity 模型进入 Cursor 原生模型选择器，支持模型及其提供的推理深度选项。
 - 保留 Cursor 原生对话界面，并完成上下文读取、ACP 会话映射和原生消息回写。
-- 原生管理面板、服务启停、模型刷新和账号重新连接。
+- 原生管理面板：启动服务仅显示带「·Antigravity」后缀的插件模型；停止服务立即恢复 Cursor 原生模型，无需重启或重复授权。断线不会自动切换到 Cursor 模型。
 - 多个 Cursor 窗口共享一个已认证的本地 Gateway。
-- 39 项自动化测试通过，生命周期和工具处理探测通过。
+- 双平台各 45 项自动化测试通过，生命周期、真实资源安装与恢复、Gemini 4 Hydrogen Low 原生聊天验收通过。
 - Workbench 修改采用主动启用、版本校验、备份、哈希验证和可恢复机制。
 
 Cursor 没有提供公开 API 来注册任意第三方模型供应商，因此当前 Cursor 适配器使用范围较窄、按版本校验、可恢复的 Workbench 兼容层。它不替换 Cursor 可执行文件，也不制作 Cursor Fork。
@@ -76,8 +76,8 @@ Cursor 就是第一个实例。后续客户端必须先验证其公开扩展 API
 1. 从 [GitHub Releases](https://github.com/rizetngan/antigravity-harness-bridge/releases) 下载 VSIX。
 2. 在 Cursor 中打开 Antigravity 管理面板。
 3. 点击 **Enable Native Models**，确认启用 Workbench 兼容补丁。
-4. 重载 Cursor；如提示认证，按官方 Antigravity CLI 流程登录。
-5. 在 Cursor 原生模型选择器中选择 Antigravity 模型。
+4. 首次启用或升级兼容补丁后，完全退出并重新打开 Cursor；如提示认证，按官方 Antigravity CLI 流程登录。macOS 若提示应用管理权限，请按系统提示授权。
+5. 启动服务后，在 Cursor 原生模型选择器中选择 Antigravity 模型及思考深度；停止服务恢复原生模型。日常启停无需重启或重新授权。
 
 从旧版本升级时，先执行旧版本的 **Restore Cursor**，再安装新 VSIX。当前实现、恢复方式和边界见[架构说明](docs/architecture.md)。
 
@@ -85,7 +85,7 @@ Cursor 就是第一个实例。后续客户端必须先验证其公开扩展 API
 
 ![项目升级路线](docs/images/roadmap.jpg)
 
-1. **保持 Cursor 稳定：** 保留 V1.1.2 已验证适配器及确定性恢复能力。
+1. **保持 Cursor 稳定：** 保留 V1.2.0 已验证适配器及确定性恢复能力。
 2. **抽离通用核心：** 将 Antigravity Runtime、模型目录、会话、标准事件、权限和上下文契约从 Cursor 代码中拆开。
 3. **优先复用 ACP：** 对已有 ACP 支持的客户端直接使用官方协议，不重复开发。
 4. **按需开发原生适配器：** 只有宿主公开 API 能带来实质能力时才开发专用适配器。
@@ -133,10 +133,10 @@ npm run package:vsix
 GitHub 仓库名为 antigravity-harness-bridge，产品名为 **Antigravity Agent Bridge**。现有 VSIX 继续作为 **Antigravity for Cursor** 适配器，避免改变已安装插件的身份。
 
 
-## Windows 支持（1.2.0 候选版）
+## Windows 支持
 
 - 首先支持 Windows x64，使用 Google 官方 [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli)，在 PowerShell 中确认 \`agy --version\`。
 - 插件会自动识别官方 CLI 的默认安装位置、Cursor 实际安装目录和用户数据目录。支持自定义盘符安装；如果安装目录受 Windows 管理员权限保护，启用时会弹出 UAC 管理员授权；无需长期以管理员身份运行 Cursor。
 - 安装 VSIX 后，使用原有管理面板启用原生模型、登录、刷新模型、启停服务或恢复 Cursor。
 - 独立恢复工具位于 \`%LOCALAPPDATA%\Antigravity for Cursor\recovery\` 下的 \`Restore Cursor.cmd\`，先退出 Cursor，确保 Node.js 22+ 在 PATH 中，再运行工具；恢复时会自动请求 UAC 管理员授权。
-- 不自动提权修改系统级安装；Windows 真实账户和原生界面仍需完成验收。
+- 不自动提权修改系统级安装；Windows x64 已在 Cursor 3.28.7 完成真实账户、原生模型选择、服务启停及恢复验收。

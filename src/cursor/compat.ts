@@ -24,6 +24,16 @@ const STRATEGY_PATCH = /this\._executionStrategy=\/\* ANTIGRAVITY_TURN_STRATEGY 
 const FACTORY = /function ([\w$]+)\(([\w$]+),([\w$]+)\)\{return ([\w$]+)\(\2,\3\)\}/g;
 const WRAPPED_FACTORY = /function ([\w$]+)\(([\w$]+),([\w$]+)\)\{const __agClient=([\w$]+)\(\2,\3\);return globalThis\.__antigravityBridge\?globalThis\.__antigravityBridge\.wrapClient\(__agClient,\2\):__agClient\}/g;
 
+// Native picker seams: operate on model arrays after the host applies its own
+// availability/visibility rules. Preserve the full internal catalogue and preferences.
+const PICKER_LIST = /(let ([\w$]+)=[\w$]+\([\w$]+,[\w$]+,[\w$]+,[\w$]+\(\)\);)(return [\w$]+==="background-composer"&&\(\2=[\w$]+\(\2\)\),[\w$]+\(\2,[\w$]+\)\?[\w$]+:\([\w$]+=\2,\2\))/g;
+const LEGACY_PICKER = /(getAvailableModelsReactiveWithStatus\([\w$]+\)\{let ([\w$]+);[\s\S]{1,5000}?)(return \2)(\}_setUseOpenAIKey\()/g;
+const SETTINGS_PICKER = /return (this\.modelConfigService\.getAvailableDefaultModels\(\)\.filter\(([\w$]+)=>!\2\.isLongContextOnly&&!this\.getHardcodedLongContextOnlyModelNames\(\)\.includes\(\2\.name\)\)\.map\(\2=>[\w$]+\(\2\)\))(?=\},this\.isModelDisabled=)/g;
+const PICKER_PROPS = /(models:([\w$]+)\(\),initialSelections:[\w$]+\(\),initialMultiModelMode:[\s\S]{1,2500}?defaultVisibleModelIds:)([\w$]+\(\))([\s\S]{1,2000}?hideAutoToggle:)([\w$]+\(\)\|\|[\w$]+\(\))/g;
+const PICKER_LIST_MARK = "/* ANTIGRAVITY_PROVIDER_PICKER */";
+const LEGACY_PICKER_MARK = "/* ANTIGRAVITY_PROVIDER_LEGACY */";
+const SETTINGS_PICKER_MARK = "/* ANTIGRAVITY_PROVIDER_SETTINGS */";
+const PICKER_PROPS_MARK = "/* ANTIGRAVITY_PROVIDER_PROPS */";
 const TARGET_SPECS = [
   { key: "vs/workbench/workbench.desktop.main.js", file: "workbench.desktop.main.js", kind: "desktop", backup: "workbench.original.js" },
   { key: "vs/workbench/workbench.glass.main.js", file: "workbench.glass.main.js", kind: "glass", backup: "glass.original.js" },
@@ -115,6 +125,14 @@ export function anchorCounts(source: string): { adapter: boolean; ok: boolean; a
     },
   ];
 
+  for (const [id, pattern, mark] of [
+    ["provider_picker", PICKER_LIST, PICKER_LIST_MARK],
+    ["provider_legacy", LEGACY_PICKER, LEGACY_PICKER_MARK],
+    ["provider_settings", SETTINGS_PICKER, SETTINGS_PICKER_MARK],
+    ["provider_props", PICKER_PROPS, PICKER_PROPS_MARK],
+  ] as const) {
+    anchors.push({ id, count: [...body.matchAll(pattern)].length, patched: body.split(mark).length - 1, required: false, ok: false });
+  }
   for (const anchor of anchors) {
     const total = anchor.count + anchor.patched;
     anchor.ok = anchor.required ? total === 1 : total <= 1;
@@ -191,6 +209,18 @@ export function patchSource(
     body = body.slice(0, at) + GLASS_SEAM_TEXT + body.slice(at);
   }
 
+  for (const [id, pattern] of [["provider picker", PICKER_LIST], ["legacy picker", LEGACY_PICKER], ["settings picker", SETTINGS_PICKER], ["picker props", PICKER_PROPS]] as const) {
+    const matches = [...body.matchAll(pattern)];
+    if (matches.length > 1) throw new Error("Ambiguous Cursor " + id + " seam.");
+  }
+  body = body.replace(PICKER_LIST, (_all, head: string, variable: string, tail: string) =>
+    head + PICKER_LIST_MARK + variable + "=globalThis.__antigravityBridge?.filterVisibleModels?.(" + variable + ")??" + variable + ";" + tail);
+  body = body.replace(LEGACY_PICKER, (_all, head: string, variable: string, _return: string, tail: string) =>
+    head + LEGACY_PICKER_MARK + "return globalThis.__antigravityBridge?.filterVisibleModels?.(" + variable + ")??" + variable + tail);
+  body = body.replace(SETTINGS_PICKER, (_all, expression: string) =>
+    "return " + SETTINGS_PICKER_MARK + "(function(__agModels){return globalThis.__antigravityBridge?.filterVisibleModels?.(__agModels)??__agModels})(" + expression + ")");
+  body = body.replace(PICKER_PROPS, (_all, head: string, models: string, ids: string, middle: string, hideAuto: string) =>
+    head + PICKER_PROPS_MARK + "(function(__agIds){return globalThis.__antigravityBridge?.preferredVisibleIds?.(__agIds," + models + "())??__agIds})(" + ids + ")" + middle + "(" + hideAuto + "||globalThis.__antigravityBridge?.isProviderActive?.()===true)");
   return START + "\n" + runtime + "\n" + END + "\n" + body;
 }
 

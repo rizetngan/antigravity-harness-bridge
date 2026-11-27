@@ -26,7 +26,7 @@ if(s.patch==="checking"){label="正在检查";detail="";dot="wait"}
 else if(reload){label="需要重载窗口";detail=enabled?"启用后加载原生模型":"完成原版恢复";dot="wait";action="reload";actionText="立即重载"}
 else if(s.patch==="partial"||s.patch==="unsupported"){label="需要检查";detail="兼容性状态异常";notice="查看连接状态，必要时恢复原版。"}
 else if(!enabled){action="enable";actionText="启用原生模型"}
-else if(!running){label="服务已停止";detail="模型选择与对话已保留"}
+else if(!running){label="服务已停止";detail="已恢复 Cursor 原生模型"}
 else if(s.connected){label="服务运行中";detail=s.models.length+" 个模型系列 · "+s.variants+" 个变体";dot="on"}
 else if(s.connecting){label="正在连接";detail="加载账号模型";dot="wait"}
 else {label="服务已启动";detail=s.error==="login"?"需要登录":"尚未连接模型目录";notice=s.error==="connection"?"连接失败，请刷新模型或重新登录。":""}

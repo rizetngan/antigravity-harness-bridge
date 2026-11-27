@@ -9,6 +9,6 @@
 7. **Authentication** — official CLI sign-in can expire independently of Cursor. Use Sign In / Reconnect and refresh models.
 8. **Scope** — macOS initial target; remote/cloud workspaces, image payloads, full tool transcript migration and Cursor context-window reporting are not fully supported.
 
-9. **Multi-harness scope** — V1.1.2 ships only the Cursor native adapter. ACP-native editors can use Google's documented direct agy acp route, but those clients have not all been tested by this repository. Non-ACP hosts need separate native adapters.
+9. **Multi-harness scope** — V1.2.0 ships only the Cursor native adapter. ACP-native editors can use Google's documented direct agy acp route, but those clients have not all been tested by this repository. Non-ACP hosts need separate native adapters.
 10. **ACP model visibility** — model visibility varies by client. Google documents Gemini availability across ACP clients and third-party model availability only for a subset of supported clients. Do not infer full account catalogue access from ACP support alone.
-11. **Bridge Core** — the host-neutral Bridge Core and Adapter SDK are roadmap items, not shipped components in V1.1.2.
+11. **Bridge Core** — the host-neutral Bridge Core and Adapter SDK are roadmap items, not shipped components in V1.2.0.

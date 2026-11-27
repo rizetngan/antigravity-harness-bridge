@@ -1,13 +1,24 @@
 # Changelog
 
 
-## 1.2.0 — Windows candidate
+## 1.2.0 — Windows + macOS
 
-- Add Windows-native agy.exe discovery and PowerShell login.
-- Separate local bridge data from Cursor roaming data, preserving macOS paths.
-- Support Windows custom-drive Cursor installs and an independent recovery launcher.
-- Add Windows real-resource copy patch/restore probe and cross-platform tests.
-- Keep v1.1.2 main/release untouched until Windows end-to-end acceptance.
+### Added
+- Windows x64 support, official agy.exe discovery and PowerShell login, including custom-drive Cursor installs.
+- Windows UAC-protected compatibility installer and standalone Restore Cursor.cmd; existing macOS recovery remains available.
+- Exclusive provider switching: Start Service shows Antigravity models only; Stop Service restores Cursor's native picker without restarting Cursor.
+- Clear model labels: Gemini 4 Hydrogen·Antigravity, with native reasoning-depth selection.
+
+### Fixed
+- Windows application-directory write detection and stale Workbench loading after a compatibility update.
+- Explicit stop versus transient disconnect: the ACP process stops, while a lightweight authenticated local control endpoint communicates the paused state. Disconnects do not silently route to Cursor models.
+- Preserve the original native catalogue and existing conversation history; use Cursor's native parameter validation and preferences.
+
+### Verified
+- Cursor 3.28.7 on Windows x64 and macOS Apple Silicon; official Antigravity CLI 1.5.18.
+- 45 automated tests per platform, real-resource patch/restore and lifecycle probes passed.
+- Both native model pickers switched between the two providers, listed all 11 available model families (27 variants at test time), and returned successful real Gemini 4 Hydrogen Low chat responses.
+- A full Cursor quit/relaunch may be needed after initial installation or compatibility updates. Routine Start/Stop needs neither restart nor elevation.
 
 ## 1.1.2 — 2026-11-27
 

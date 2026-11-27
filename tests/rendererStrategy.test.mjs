@@ -9,12 +9,16 @@ const model = { id: "gemini-test", name: "Gemini Test", variants: [{ id: "gemini
 const userMessage = { text: "test", messageId: "user", mode: 1 };
 function setup(events = [{ message: { interactionUpdate: { textDelta: { text: "ok" } } } }, { checkpoint: { userMessage, steps: [{ assistantMessage: { text: "ok" } }], state: { turns: [] }, mode: 1, modelName: "Gemini Test" } }, { done: true }]) {
   const requests = [], updates = [], blobs = [], checkpoints = [];
+  let enabled = true, online = true, timer;
+  const storage = new Map();
   const context = vm.createContext({
-    console: { info(){}, warn(){} }, localStorage: { getItem: () => JSON.stringify({models:[model]}), setItem(){} }, crypto: webcrypto, AbortController, AbortSignal, Headers, TextDecoder, btoa, atob, Uint8Array,
-    setTimeout: () => 0, clearTimeout(){},
+    console: { info(){}, warn(){} }, localStorage: { getItem: key => storage.get(key) ?? (key.endsWith(".provider") ? null : key.endsWith(".preferences") ? null : JSON.stringify({models:[model]})), setItem(key,value){storage.set(key,value);} }, crypto: webcrypto, AbortController, AbortSignal, Headers, TextDecoder, btoa, atob, Uint8Array,
+    setTimeout: fn => { timer=fn; return 1; }, clearTimeout(){},
     fetch: async (url, init) => {
       requests.push({ url, body: init.body ? JSON.parse(init.body) : undefined });
-      if (url.endsWith("/catalog")) return Response.json({ enabled: true, models: [model] });
+      if (!online) throw new Error("offline");
+      if (url.endsWith("/mode")) return Response.json({ enabled });
+      if (url.endsWith("/catalog")) return Response.json({ enabled, models: enabled ? [model] : [] });
       return new Response(url.endsWith("/start") ? events.map(v=>JSON.stringify(v)).join("\n")+"\n" : "");
     },
   });
@@ -33,7 +37,7 @@ function setup(events = [{ message: { interactionUpdate: { textDelta: { text: "o
   };
   let nativeCalls=0;
   const strategy=bridge.wrapExecutionStrategy({executeTurn: async()=>{nativeCalls++}});
-  return {strategy, turn, requests, updates, blobs, checkpoints, bridge, nativeCalls:()=>nativeCalls};
+  return {strategy, turn, requests, updates, blobs, checkpoints, bridge, nativeCalls:()=>nativeCalls, async switchMode(value){await new Promise(r=>setImmediate(r)); enabled=value; await timer();}, async disconnect(){online=false; await timer();}, storage};
 }
 test("routes selected Antigravity turns directly to ACP and writes native checkpoint", async()=>{
   const t=setup();
@@ -49,6 +53,7 @@ test("routes selected Antigravity turns directly to ACP and writes native checkp
 test("leaves ordinary Cursor models on the original strategy", async()=>{
   const t=setup();
   t.turn.runOptions.requestedModel.modelId="cursor-model";
+  await t.switchMode(false);
   await t.strategy.executeTurn(t.turn);
   assert.equal(t.nativeCalls(),1);
   assert.equal(t.requests.filter(r=>r.url.endsWith("/start")).length,0);
@@ -132,4 +137,45 @@ test("keeps model labels stable when the service goes offline and refreshes reac
   assert.equal(bridge.catalogueStatus(),"unavailable");
   assert.deepEqual(names(),cached);
   assert.ok(reads>=3);
+});
+
+test("adds Antigravity suffix only to bridge labels while preserving route identity and effort", async()=>{
+  const t=setup();
+  const native={name:"gemini-test",clientDisplayName:"Gemini Test",defaultOn:true};
+  const entries=t.bridge.mergeModels({},[native]);
+  assert.equal(entries[0],native);
+  const entry=entries[1];
+  assert.equal(entry.name,"antigravity/gemini-test");
+  assert.equal(entry.vendorName,"Antigravity");
+  assert.equal(entry.clientDisplayName,"Gemini Test\u00b7Antigravity");
+  assert.equal(entry.inputboxShortModelName,"Gemini Test\u00b7Antigravity");
+  assert.equal(entry.variants[1].displayName,"Gemini Test\u00b7Antigravity \u00b7 High");
+  assert.equal(entry.variants[1].displayNameOutsidePicker,"Gemini Test\u00b7Antigravity \u00b7 High");
+  assert.equal(entry.variants[1].variantStringRepresentation,"antigravity/gemini-test[reasoning_effort=high]");
+  await t.strategy.executeTurn(t.turn);
+  const req=t.requests.find(r=>r.url.endsWith("/start")).body.first.runRequest;
+  assert.equal(req.modelDetails.displayName,"Gemini Test\u00b7Antigravity");
+  assert.equal(req.requestedModel.modelId,"antigravity/gemini-test");
+});
+
+test("explicit stop restores native models, restart shows only bridge models, offline never falls back",async()=>{
+  const t=setup();
+  const native={name:"gemini-test",clientDisplayName:"Gemini Test",defaultOn:true};
+  const service={reactiveStorageService:{availableModelsCatalogRevision(){},bumpAvailableModelsCatalogRevision(){}}};
+  const visible=()=>Array.from(t.bridge.filterVisibleModels(t.bridge.mergeModels(service,[native])),m=>m.name);
+  assert.deepEqual(visible(),["antigravity/gemini-test"]);
+  assert.deepEqual(Array.from(t.bridge.preferredVisibleIds([],t.bridge.mergeModels(service,[native]))),["antigravity/gemini-test"]);
+  t.turn.runOptions.requestedModel.modelId="gemini-test";
+  await assert.rejects(t.strategy.executeTurn(t.turn),/mode is active/);
+  await t.switchMode(false);
+  assert.equal(t.bridge.catalogueStatus(),"paused");
+  assert.deepEqual(visible(),["gemini-test"]);
+  t.turn.runOptions.requestedModel.modelId="antigravity/gemini-test";
+  await assert.rejects(t.strategy.executeTurn(t.turn),/service is stopped/);
+  await t.switchMode(true);
+  assert.deepEqual(visible(),["antigravity/gemini-test"]);
+  await t.disconnect();
+  assert.equal(t.bridge.catalogueStatus(),"unavailable");
+  assert.deepEqual(visible(),["antigravity/gemini-test"]);
+  assert.equal(t.nativeCalls(),0);
 });

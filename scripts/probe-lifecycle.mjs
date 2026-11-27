@@ -28,15 +28,21 @@ try {
   assert.equal((await health({url: independent.url, token:config.token})).status,401);
   await gateway.stop();
   assert.equal(gateway.running, false);
-  await assert.rejects(health(config));
+  assert.equal((await health(config)).status,200);
+  const get = route => fetch(config.url+route,{headers:{Authorization:"Bearer "+config.token}}).then(r=>r.json());
+  assert.equal((await get("/mode")).enabled,false);
+  assert.deepEqual((await get("/catalog")).models,[]);
+  const denied=await fetch(config.url+"/sessions/paused/start",{method:"POST",headers:{Authorization:"Bearer "+config.token},body:"{}"});
+  assert.equal(denied.status,503);
   await assert.rejects(gateway.refreshCatalogue(), /stopped/);
   assert.equal((await health(independent)).status,200);
   const restarted = await gateway.start();
   assert.deepEqual(restarted, config);
+  assert.equal((await get("/mode")).enabled,true);
   assert.equal((await health(restarted)).status,200);
   await gateway.stop();
   assert.equal(gateway.running,false);
-  console.log("PASS: start / stop / restart / closed HTTP listener / same-app profile rejection / independent app credentials / unrelated service preserved");
+  console.log("PASS: start / stop / restart / authenticated paused control listener, no ACP routes / same-app profile rejection / independent app credentials / unrelated service preserved");
 } finally {
   gateway.dispose(); other.dispose(); separateApp.dispose();
   process.env.HOME = previousHome;

@@ -93,6 +93,7 @@ export class AntigravityGateway {
   private readonly sessions: SessionStore;
   private readonly profileId: string;
   private borrowedGateway = false;
+  private paused = true;
   private borrowedConnected = false;
   private borrowedVariants = 0;
   private borrowedActive = 0;
@@ -126,7 +127,7 @@ export class AntigravityGateway {
     this.sessions = new SessionStore(profileStorage ? path.join(profileStorage, "acp-sessions") : this.storageDirectory);
   }
 
-  get running(): boolean { return Boolean(this.server || this.borrowedGateway); }
+  get running(): boolean { return !this.paused && Boolean(this.server || this.borrowedGateway); }
 
   async isPaused(): Promise<boolean> {
     try { await fs.access(path.join(this.storageDirectory, "service-paused")); return true; }
@@ -141,14 +142,13 @@ export class AntigravityGateway {
   }
 
   async attachExisting(): Promise<boolean> {
-    if (await this.isPaused()) return false;
     await fs.mkdir(this.storageDirectory, { recursive: true });
     this.token = await this.loadOrCreateToken();
     if (!(await this.existingGatewayIsHealthy())) { this.token = ""; return false; }
     this.borrowedGateway = true;
     this.output.appendLine("Attached to the shared Antigravity gateway already running in another Cursor window.");
     await this.syncRemoteStatus();
-    return true;
+    return this.borrowedGateway;
   }
 
   get panelStatus() {
@@ -167,51 +167,39 @@ export class AntigravityGateway {
   async stop(): Promise<void> {
     if (this.borrowedGateway) {
       const result = await this.remoteControl("stop");
-      if (!result.accepted) throw new Error(result.error ?? "无法停止共享服务。");
-      let stopped = false;
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        if (!(await this.existingGatewayIsHealthy())) { stopped = true; break; }
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      if (!stopped) throw new Error("已发送停止请求，但服务窗口尚未退出。请稍后刷新状态。");
-      await this.setPaused(true);
-      this.borrowedGateway = false;
-      this.borrowedConnected = false;
-      this.borrowedVariants = 0;
-      this.borrowedActive = 0;
-      this.borrowedConnecting = false;
-      this.borrowedError = undefined;
-      this.models = [];
-      this.output.appendLine("Requested Antigravity service stop from its owning Cursor window.");
+      if (!result.accepted) throw new Error(result.error ?? "Unable to stop shared service.");
+      await this.syncRemoteStatus();
+      if (this.running) throw new Error("Shared service has not stopped.");
       return;
     }
-    if (this.activeRuns.size || this.preparingRuns) throw new Error("请先停止或完成当前 Antigravity 任务。");
+    if (this.activeRuns.size || this.preparingRuns) throw new Error("Finish or cancel the current Antigravity task first.");
     this.stopping = true;
     try {
+      await this.setPaused(true);
+      this.paused = true;
       if (this.catalogueRefreshPromise) await this.catalogueRefreshPromise.catch(() => undefined);
-      const server = this.server;
-      this.server = undefined;
-      if (server) {
-        server.closeAllConnections();
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-      }
       this.acp.dispose();
       this.acp = new AntigravityAcpProcess(new AcpClientHandlers());
       this.catalogue = undefined;
       this.models = [];
       this.catalogueError = undefined;
       this.catalogueRetryAt = 0;
-      this.token = "";
       await this.sessions.dispose();
-      await this.setPaused(true);
-      this.output.appendLine("Antigravity local gateway and ACP stopped.");
+      // Keep the authenticated local control listener alive so every renderer
+      // can distinguish an explicit stop from a transient disconnection.
+      this.revision += 1;
+      this.output.appendLine("Antigravity ACP stopped; Cursor model mode restored.");
     } finally { this.stopping = false; }
   }
 
-  async start(): Promise<GatewayConfig> {
+  async start(paused = false): Promise<GatewayConfig> {
     if (this.disposed || this.stopping) throw new Error("Antigravity service is stopping or disposed.");
     if (this.borrowedGateway) {
-      if (await this.existingGatewayIsHealthy()) { await this.setPaused(false); return this.config(); }
+      if (await this.existingGatewayIsHealthy()) {
+        if (!paused) await this.remoteControl("start");
+        await this.syncRemoteStatus();
+        return this.config();
+      }
       this.borrowedGateway = false;
       this.borrowedConnected = false;
       this.borrowedVariants = 0;
@@ -221,7 +209,12 @@ export class AntigravityGateway {
       this.models = [];
       this.token = "";
     }
-    if (this.server && this.token) { await this.setPaused(false); return this.config(); }
+    if (this.server && this.token) {
+      await this.setPaused(paused);
+      this.paused = paused;
+      this.revision += 1;
+      return this.config();
+    }
     await fs.mkdir(this.storageDirectory, { recursive: true });
     this.token = await this.loadOrCreateToken();
 
@@ -244,14 +237,16 @@ export class AntigravityGateway {
         server.listen(this.port, HOST);
       });
       this.server = server;
-      await this.setPaused(false);
+      await this.setPaused(paused);
+      this.paused = paused;
       this.output.appendLine("Local ACP gateway listening at http://" + HOST + ":" + this.port);
     } catch (error) {
       server.close();
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "EADDRINUSE" || !(await this.existingGatewayIsHealthy())) throw error;
       this.borrowedGateway = true;
-      await this.setPaused(false);
+      if (!paused) await this.remoteControl("start");
+      await this.syncRemoteStatus();
       this.output.appendLine("Reusing the authenticated ACP gateway started by another window of this profile.");
     }
     return this.config();
@@ -347,7 +342,7 @@ export class AntigravityGateway {
         running: boolean; connected: boolean; models: ReturnType<typeof buildCursorModelDefinitions>;
         variants: number; active: number; connecting: boolean; error?: string;
       };
-      if (!status.running) throw new Error("Antigravity service is stopped.");
+      this.paused = !status.running;
       this.applyBorrowedState(status);
     } catch (error) {
       this.borrowedConnected = false;
@@ -386,7 +381,7 @@ export class AntigravityGateway {
     return body;
   }
 
-  private async remoteControl(action: "refresh" | "reconnect" | "stop"): Promise<any> {
+  private async remoteControl(action: "refresh" | "reconnect" | "stop" | "start"): Promise<any> {
     const response = await fetch(this.config().url + "/control", {
       method: "POST",
       headers: { Authorization: "Bearer " + this.token, "Content-Type": "application/json" },
@@ -457,7 +452,8 @@ export class AntigravityGateway {
       if (!this.authorized(request)) return this.sendJson(response, 401, { error: "Unauthorized" });
       return this.sendJson(response, 200, {
         ok: true,
-        version: "1.1.0",
+        running: this.running,
+        version: "1.2.0",
         profileId: this.profileId,
         catalogRequests: this.catalogRequestCount,
         runRequests: this.runRequestCount,
@@ -470,16 +466,21 @@ export class AntigravityGateway {
     }
 
     try {
-      if (this.stopping || this.disposed) { this.sendJson(response, 503, { error: "Antigravity service is stopping." }); return; }
+      if (this.disposed) { this.sendJson(response, 503, { error: "Antigravity service is disposed." }); return; }
+      if (request.method === "GET" && url.pathname === "/mode") {
+        this.sendJson(response, 200, { enabled: !this.paused, revision: this.revision }); return;
+      }
+      if (this.stopping) { this.sendJson(response, 503, { error: "Antigravity service is stopping." }); return; }
       if (request.method === "GET" && url.pathname === "/catalog") {
         this.catalogRequestCount += 1;
+        if (this.paused) { this.sendJson(response, 200, { enabled: false, models: [], revision: this.revision }); return; }
         const models = this.catalogue ? this.models : await this.refreshCatalogue();
         this.sendJson(response, 200, { enabled: true, models, variants: this.catalogue?.availableModels.length ?? models.reduce((total, model) => total + model.variants.length, 0), revision: this.revision });
         return;
       }
       if (request.method === "GET" && url.pathname === "/status") {
         this.sendJson(response, 200, {
-          running: true, connected: Boolean(this.catalogue), models: this.models,
+          running: !this.paused, connected: !this.paused && Boolean(this.catalogue), models: this.models,
           variants: this.catalogue?.availableModels.length ?? 0,
           active: this.activeRuns.size + this.preparingRuns,
           connecting: Boolean(this.catalogueRefreshPromise),
@@ -490,6 +491,11 @@ export class AntigravityGateway {
       if (request.method === "POST" && url.pathname === "/control") {
         const body = await this.readJsonBody(request);
         const action = body.action;
+        if (action === "start") {
+          await this.start();
+          this.sendJson(response, 200, { accepted: true });
+          return;
+        }
         if (action === "refresh") {
           const models = await this.refreshCatalogue(true);
           this.sendJson(response, 200, { accepted: true, connected: true, models, variants: this.catalogue?.availableModels.length ?? 0, active: this.activeRuns.size + this.preparingRuns });
@@ -505,20 +511,16 @@ export class AntigravityGateway {
             this.sendJson(response, 409, { accepted: false, error: "Agent 正在执行任务，请等待任务完成后再停止服务。" });
             return;
           }
-          this.sendJson(response, 202, { accepted: true });
-          response.once("finish", () => {
-            setTimeout(() => {
-              void this.stop().then(() => this.onRemoteStop?.()).catch(error => {
-                this.output.appendLine("Remote service stop failed: " + safeError(error));
-              });
-            }, 120);
-          });
+          await this.stop();
+          await this.onRemoteStop?.();
+          this.sendJson(response, 200, { accepted: true });
           return;
         }
         this.sendJson(response, 400, { error: "Unsupported service control action." });
         return;
       }
 
+      if (this.paused) { this.sendJson(response, 503, { error: "Antigravity service is stopped. Start it before using an Antigravity model." }); return; }
       const match = /^\/sessions\/([^/]+)\/(start|input|cancel)$/.exec(url.pathname);
       if (!match) {
         this.sendJson(response, 404, { error: "Not found" });

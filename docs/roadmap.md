@@ -10,14 +10,14 @@
 
 ## Phase 0 — 稳定当前 Cursor Adapter
 
-**已完成：V1.1.2**
+**已完成：V1.2.0**
 
 - Antigravity 官方 ACP 连接。
 - Cursor 原生模型选择器和 Agent 执行链路。
 - 对话上下文与 Session 映射。
 - 原生管理面板、服务生命周期和多窗口共享 Gateway。
 - Workbench 版本校验、备份、哈希验证和恢复。
-- 39 项自动化测试通过。
+- 双平台各 45 项自动化测试、服务切换及 Hydrogen Low 原生聊天通过。
 
 **验收基线：** Cursor 3.28.7 / macOS Apple Silicon；日常 Cursor 安装不参与开发测试。
 
@@ -37,7 +37,7 @@
 
 **验收：**
 - 核心层不 import Cursor 私有类型或 Workbench 代码。
-- Cursor Adapter 仍通过原有 39 项测试及新增回归测试。
+- Cursor Adapter 仍通过原有 45 项测试及新增回归测试。
 - ACP 进程只由一个 Runtime Manager 管理。
 - 模型、会话、权限和事件有明确能力声明。
 

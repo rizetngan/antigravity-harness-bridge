@@ -95,7 +95,7 @@
     const normalizedId = selection ? prefix + selection.variant.id : modelId;
     const parameters = sanitizeParameters(requested.parameters, selection?.parameters || []);
     const displayName = selection
-      ? 'Antigravity · ' + prettyModelName(selection.model) + (selection.variant.label ? ' ' + selection.variant.label : '')
+      ? bridgeModelDisplayName(selection.model, selection.variant)
       : (run.modelDetails?.displayName || 'Antigravity');
     const modelDetails = {
       modelId: normalizedId,
@@ -189,6 +189,8 @@
       const request = runRequestOf(value);
       if (request) trace('AgentService.run request item', { keys: Object.keys(value || {}), modelIds: modelIds(request), custom: isCustom(value) });
       if (!request) { buffered.push(next.value); continue; }
+      if (!isCustom(value) && providerActive) throw new Error('Antigravity mode is active. Select an Antigravity model or stop the service.');
+      if (isCustom(value) && !providerActive) throw new Error('Antigravity service is stopped.');
       if (!isCustom(value)) { trace('AgentService.run passthrough', { reason: 'non_antigravity_model', modelIds: modelIds(request) }); yield* original(combined([...buffered, next.value], iterator), options); return; }
       initial = value;
       break;
@@ -284,6 +286,9 @@
       return part[0].toUpperCase() + part.slice(1);
     }).join(' ');
   }
+  function bridgeModelDisplayName(model, variant) {
+    return prettyModelName(model) + (variant?.label ? ' ' + variant.label : '') + '\u00b7Antigravity';
+  }
   function effortDisplayName(value) {
     return ({ minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' })[value] || value;
   }
@@ -296,8 +301,8 @@
         const id = prefix + variant.id;
         // Cursor shows variant.displayName in the picker and displayNameOutsidePicker in the
         // input box. Both must carry the model name; the effort label alone reads as a model.
-        const shortName = prettyModelName(model) + (variant.label ? ' ' + variant.label : '');
-        const displayName = 'Antigravity · ' + shortName;
+        const shortName = bridgeModelDisplayName(model, variant);
+        const displayName = shortName;
         if (agent) {
           entries.push({
             modelId: id, displayModelId: id, displayName, displayNameShort: displayName,
@@ -380,6 +385,62 @@
   let cachedModels = loadCachedModels();
   let pickerModels = modelEntries(cachedModels), pickerSignature = JSON.stringify(modelEntries(cachedModels)), modelService, stopped = false, catalogueTimer;
   let catalogueStatus = 'connecting';
+  const modeKey = catalogueStorageKey + '.provider';
+  const preferencesKey = catalogueStorageKey + '.preferences';
+  // The persisted intent is authoritative during temporary loss of the listener.
+  let providerActive = true;
+  try { providerActive = globalThis.localStorage?.getItem(modeKey) !== 'cursor'; } catch {}
+  let modeKnown = false;
+  let nativeBase = [], preferencePending = true, preferenceScheduled = false;
+  function isBridgeModel(model) { return String(model?.name || model?.modelId || '').startsWith(prefix); }
+  function filterVisibleModels(models) { return models.filter(model => isBridgeModel(model) === providerActive); }
+  function preferredVisibleIds(ids, models) {
+    if (!providerActive || !Array.isArray(ids)) return ids;
+    return [...new Set([...ids, ...models.filter(m => isBridgeModel(m) && m.defaultOn).map(m => m.name)])];
+  }
+  function schedulePreferenceRestore() {
+    if (!modeKnown || !preferencePending || preferenceScheduled || !modelService || (providerActive && !pickerModels.length)) return;
+    preferenceScheduled = true;
+    Promise.resolve().then(() => { preferenceScheduled = false; if (!preferencePending) return; preferencePending = false; rememberGlobalSelection(); });
+  }
+  function rememberGlobalSelection() {
+    const service = modelService;
+    if (!service?.getStoredModelConfig || !service?.setModelConfig) return;
+    try {
+      const current = service.reactiveStorageService?.applicationUserPersistentStorage?.aiSettings?.modelConfig?.composer || service.getStoredModelConfig('composer');
+      const id = current?.selectedModels?.[0]?.modelId || current?.modelName;
+      if (!id || typeof id !== 'string') return;
+      const currentMode = id.startsWith(prefix) ? 'bridge' : 'cursor';
+      const targetMode = providerActive ? 'bridge' : 'cursor';
+      let prefs = {};
+      try { prefs = JSON.parse(globalThis.localStorage?.getItem(preferencesKey) || '{}') || {}; } catch {}
+      prefs[currentMode] = { modelName: current.modelName, selectedModels: current.selectedModels, maxMode: current.maxMode };
+      try { globalThis.localStorage?.setItem(preferencesKey, JSON.stringify(prefs)); } catch {}
+      if (currentMode === targetMode) return;
+      const available = providerActive ? pickerModels : nativeBase;
+      const remembered = prefs[targetMode];
+      const candidate = remembered?.selectedModels?.[0]?.modelId || remembered?.modelName;
+      if (candidate && available.some(m => availableModelNames([m]).includes(candidate))) {
+        service.setModelConfig('composer', remembered); return;
+      }
+      const first = providerActive ? available.find(m => m.defaultOn) : available.find(m => m.name === 'default') || available.find(m => m.defaultOn);
+      if (!first) return;
+      const variant = first.variants?.find(v => v.isDefaultNonMaxConfig);
+      service.setModelConfig('composer', { modelName: first.name, selectedModels: [{ modelId: first.name, parameters: variant?.parameterValues || [] }], maxMode: false });
+    } catch (error) { trace('global selection restore skipped', { reason: String(error?.message || error) }); }
+  }
+  function updateMode(enabled) {
+    const changed = !modeKnown || providerActive !== enabled;
+    providerActive = enabled; modeKnown = true;
+    try { globalThis.localStorage?.setItem(modeKey, enabled ? 'bridge' : 'cursor'); } catch {}
+    if (changed) {
+      preferencePending = true;
+      catalogue = undefined; catalogueAt = 0;
+      modelService?.reactiveStorageService?.bumpAvailableModelsCatalogRevision?.();
+      trace('provider mode changed', { provider: enabled ? 'antigravity' : 'cursor' });
+    }
+    return changed;
+  }
   function registeredModel(id, isBlocked) {
     // This predicate only describes our local provider's known model definitions.
     // It never overrides the native blocked-model policy or authorizes an ACP request.
@@ -401,19 +462,27 @@
   }
   async function syncPicker() {
     try {
+      const state = await (await call('/mode', undefined, AbortSignal.timeout(1500))).json();
+      if (typeof state.enabled !== 'boolean') throw new Error('Invalid provider mode');
+      updateMode(state.enabled);
+      if (!providerActive) {
+        updateCatalogueStatus('paused');
+        schedulePreferenceRestore();
+        return;
+      }
       const value = await getCatalogue();
       if (value.enabled !== true || !Array.isArray(value.models)) throw new Error('Antigravity catalogue unavailable.');
       cachedModels = value.models;
       try { globalThis.localStorage?.setItem(catalogueStorageKey, JSON.stringify({models:cachedModels})); } catch {}
       updatePicker(modelEntries(cachedModels), value.revision);
       updateCatalogueStatus('connected');
+      schedulePreferenceRestore();
     } catch {
-      // A model's name and parameter metadata are stable. Native Cursor memoizes
-      // these entries, so connection status must not become part of a model label.
-      // Retain the last catalogue for selection; all runs still require a live gateway.
-      updateCatalogueStatus('unavailable');
+      // Only an authenticated explicit stop changes the selected provider.
+      // Network failures retain the last mode and never enable Cursor billing.
+      updateCatalogueStatus(providerActive ? 'unavailable' : 'paused');
     } finally {
-      if (!stopped) catalogueTimer = setTimeout(syncPicker, 2000);
+      if (!stopped) catalogueTimer = setTimeout(syncPicker, 700);
     }
   }
   // The managed Agent Host bypasses the renderer RPC factory. Route only explicitly
@@ -546,12 +615,20 @@
     }
   }
   globalThis.__antigravityBridge = {
-    version: 16,
+    version: 17,
+    isProviderActive: () => providerActive,
+    filterVisibleModels,
+    preferredVisibleIds,
     catalogueStatus: () => catalogueStatus,
     registeredModel,
     wrapExecutionStrategy(original) {
       return {
-        executeTurn(turn) { return isBridgeTurn(turn) ? executeBridgeTurn(turn) : original.executeTurn(turn); },
+        executeTurn(turn) {
+          const bridge = isBridgeTurn(turn);
+          if (bridge && !providerActive) return Promise.reject(new Error('Antigravity service is stopped. Start it or explicitly select a Cursor model.'));
+          if (!bridge && providerActive) return Promise.reject(new Error('Antigravity mode is active. Select an Antigravity model or stop the service to use Cursor models.'));
+          return bridge ? executeBridgeTurn(turn) : original.executeTurn(turn);
+        },
         dispose() { return original.dispose?.(); },
       };
     },
@@ -563,8 +640,11 @@
       trace('model picker merged', { baseCount: base.length, antigravityCount: pickerModels.length });
       // Cursor switches its private-inference catalog from "off" to "loading"
       // during startup. That state must not suppress this independent Antigravity catalog.
-      const models = base.filter(model => !model.name?.startsWith(prefix));
-      return models.concat(pickerModels);
+      nativeBase = base.filter(model => !isBridgeModel(model));
+      // Keep internal catalogue identities available for existing conversations;
+      // only presentation seams select the active provider.
+      schedulePreferenceRestore();
+      return nativeBase.concat(pickerModels);
     },
     wrapClient(client, service) {
       if (!['agent.v1.AgentService', 'aiserver.v1.AiService'].includes(service.typeName)) return client;
@@ -582,7 +662,7 @@
             trace('model lookup invoked', { service: service.typeName, method: String(name), requestKeys: Object.keys(args[0] || {}), requestedCustomModelCount: Array.isArray(args[0]?.customModelIds) ? args[0].customModelIds.length : 0 });
             let catalog;
             try { catalog = await getCatalogue(); } catch { return original(...args); }
-            if (!catalog.enabled || !catalog.models?.length) return original(...args);
+            if (!providerActive || !catalog.enabled || !catalog.models?.length) return original(...args);
             const custom = modelResponse(service, name, catalog.models);
             let result;
             try { result = await original(...args); } catch { return custom; }

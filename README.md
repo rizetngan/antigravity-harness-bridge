@@ -22,14 +22,14 @@ The goal is not to build a replacement agent or a third-party model proxy. Antig
 
 ![Current Cursor adapter architecture](docs/images/current-cursor-flow.jpg)
 
-**V1.1.2 · macOS Apple Silicon · tested compatibility baseline: Cursor 3.28.7**
+**V1.2.0 · Windows x64 + macOS Apple Silicon · tested compatibility baseline: Cursor 3.28.7**
 
 - Official Antigravity CLI / ACP integration with live account model discovery.
-- Antigravity models appear in Cursor's native model picker, with model and supported reasoning-depth selection.
+- Start Service shows only Antigravity models in Cursor's native picker, named `Model·Antigravity`; Stop Service restores the native Cursor models immediately. Reasoning depth remains a native picker control.
 - Native Cursor conversation continuity, ACP session mapping, and native transcript updates.
 - Native management panel, service lifecycle controls, model refresh, and reconnect.
 - Multiple Cursor windows share one authenticated local gateway.
-- 39 automated tests passed; lifecycle and tool-handler probes passed.
+- 45 automated tests passed on each platform; lifecycle, real-resource patch/restore, and real Gemini 4 Hydrogen Low native-chat checks passed.
 - Workbench changes are opt-in, version-checked, backed up, hash-verified, and reversible.
 
 Cursor does not expose a public API for registering arbitrary third-party providers in its native model picker. The current adapter therefore uses a narrow, version-specific Workbench compatibility layer. It does not replace the Cursor executable or create a Cursor fork.
@@ -71,19 +71,19 @@ Some hosts need a native model picker, host-owned conversation, special event ma
 
 Cursor is the first example. Future adapters will be selected only after validating the host's documented extension or agent API. A generic OpenAI-compatible endpoint is not treated as equivalent to a full Agent Harness integration.
 
-## Windows support (1.2.0 candidate)
+## Windows support
 
 Windows x64 is the first Windows target. Install the official [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli), and verify \`agy --version\` in PowerShell. The extension detects \`%LOCALAPPDATA%\agy\bin\agy.exe\` and custom Cursor installation locations through the running editor. If the Cursor install directory is protected, enabling the integration requests Windows UAC administrator approval; Cursor itself does not need to run as administrator. The native panel and explicit enable/restore workflow are the same as on macOS.
 
-Standalone recovery is generated in \`%LOCALAPPDATA%\Antigravity for Cursor\recovery\` as \`Restore Cursor.cmd\`. Close Cursor before running it; Node.js 22+ must be available on PATH. The recovery launcher requests UAC elevation when required. Windows installations requiring administrator privileges are not automatically elevated. Live account/model and native UI validation are required before declaring full Windows support.
+Standalone recovery is generated in \`%LOCALAPPDATA%\Antigravity for Cursor\recovery\` as \`Restore Cursor.cmd\`. Close Cursor before running it; Node.js 22+ must be available on PATH. The recovery launcher requests UAC elevation when required. Windows installations requiring administrator privileges are not automatically elevated. Windows x64 native model selection, live ACP requests, start/stop switching and recovery were validated on Cursor 3.28.7.
 
 ## Current Cursor installation
 
 1. Install the VSIX from the [Releases](https://github.com/rizetngan/antigravity-harness-bridge/releases) page.
 2. Open the Antigravity panel in Cursor.
 3. Choose **Enable Native Models** and confirm the Workbench compatibility patch.
-4. Reload Cursor and sign in through the official Antigravity CLI flow if prompted.
-5. Select an Antigravity model in Cursor's native model picker.
+4. Fully quit and reopen Cursor after the initial compatibility installation or upgrade, and sign in through the official Antigravity CLI flow if prompted. On macOS, grant App Management permission to the installing application if prompted.
+5. Start Service and select an Antigravity model in Cursor's native model picker; Stop Service to return to native Cursor models. Routine switching does not require restart or administrator approval.
 
 For upgrades from an earlier release, restore the previous Workbench patch before installing the new VSIX. See the [architecture and recovery guide](docs/architecture.md).
 
@@ -91,7 +91,7 @@ For upgrades from an earlier release, restore the previous Workbench patch befor
 
 ![Project roadmap](docs/images/roadmap.jpg)
 
-1. **Keep Cursor stable** — preserve the working V1.1.2 adapter and its deterministic recovery.
+1. **Keep Cursor stable** — preserve the working V1.2.0 adapter and its deterministic recovery.
 2. **Extract the shared core** — separate Antigravity runtime, model catalogue, sessions, normalized events, permissions, and context contracts from Cursor-specific code.
 3. **Reuse ACP wherever possible** — document and optionally automate direct ACP setup instead of rebuilding integrations that already work.
 4. **Add native adapters selectively** — implement only where a host's public API provides a meaningful capability advantage.
