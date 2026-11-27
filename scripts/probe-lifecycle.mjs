@@ -1,0 +1,44 @@
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { AntigravityGateway } from "../src/gateway/AntigravityGateway.ts";
+
+const temp = await mkdtemp(path.join(tmpdir(), "antigravity-lifecycle-"));
+const previousHome = process.env.HOME;
+process.env.HOME = temp;
+const app = path.join(temp, "Test.app", "Contents", "Resources", "app");
+const profile = path.join(temp, "profile", "User", "globalStorage", "rizetngan.antigravity-cursor");
+const otherProfile = path.join(temp, "other", "User", "globalStorage", "rizetngan.antigravity-cursor");
+await mkdir(profile, { recursive: true });
+await mkdir(otherProfile, { recursive: true });
+const output = { appendLine(){}, clear(){}, show(){} };
+const gateway = new AntigravityGateway(output, profile, app);
+const other = new AntigravityGateway(output, otherProfile, app);
+const separateApp = new AntigravityGateway(output, otherProfile, path.join(temp, "Other.app", "Contents", "Resources", "app"));
+const health = c => fetch(c.url + "/health", { headers: { Authorization: "Bearer " + c.token }, signal: AbortSignal.timeout(1500) });
+try {
+  const config = await gateway.start();
+  assert.equal(gateway.running, true);
+  assert.equal((await health(config)).status, 200);
+  await assert.rejects(other.start(), /EADDRINUSE/);
+  const independent = await separateApp.start();
+  assert.notEqual(config.url, independent.url);
+  assert.notEqual(config.token, independent.token);
+  assert.equal((await health({url: independent.url, token:config.token})).status,401);
+  await gateway.stop();
+  assert.equal(gateway.running, false);
+  await assert.rejects(health(config));
+  await assert.rejects(gateway.refreshCatalogue(), /stopped/);
+  assert.equal((await health(independent)).status,200);
+  const restarted = await gateway.start();
+  assert.deepEqual(restarted, config);
+  assert.equal((await health(restarted)).status,200);
+  await gateway.stop();
+  assert.equal(gateway.running,false);
+  console.log("PASS: start / stop / restart / closed HTTP listener / same-app profile rejection / independent app credentials / unrelated service preserved");
+} finally {
+  gateway.dispose(); other.dispose(); separateApp.dispose();
+  process.env.HOME = previousHome;
+  await rm(temp,{recursive:true,force:true});
+}

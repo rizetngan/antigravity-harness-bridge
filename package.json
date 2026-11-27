@@ -1,0 +1,113 @@
+{
+  "name": "antigravity-cursor",
+  "displayName": "Antigravity for Cursor",
+  "description": "Cursor adapter for Antigravity Agent Bridge. Exposes Antigravity models in Cursor's native model picker.",
+  "version": "1.1.2",
+  "type": "module",
+  "publisher": "rizetngan",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:antigravityCursor.management"
+  ],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "antigravityCursor.enableIntegration",
+        "title": "Antigravity: Enable Native Models"
+      },
+      {
+        "command": "antigravityCursor.startService",
+        "title": "Antigravity: Start Service"
+      },
+      {
+        "command": "antigravityCursor.stopService",
+        "title": "Antigravity: Stop Service"
+      },
+      {
+        "command": "antigravityCursor.refreshModels",
+        "title": "Antigravity: Refresh Models"
+      },
+      {
+        "command": "antigravityCursor.signIn",
+        "title": "Antigravity: Sign In / Reconnect"
+      },
+      {
+        "command": "antigravityCursor.showStatus",
+        "title": "Antigravity: Show Connection Status"
+      },
+      {
+        "command": "antigravityCursor.restoreCursor",
+        "title": "Antigravity: Restore Cursor"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "antigravityCursor",
+          "title": "Antigravity",
+          "icon": "media/antigravity.svg"
+        }
+      ]
+    },
+    "views": {
+      "antigravityCursor": [
+        {
+          "type": "webview",
+          "id": "antigravityCursor.management",
+          "name": "管理面板"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
+    "probe:acp": "node scripts/probe-acp.mjs",
+    "probe:cursor-context": "node --experimental-strip-types scripts/probe-cursor-context.mjs",
+    "install:test-copy": "node --experimental-strip-types scripts/install-test-copy.mjs",
+    "restore:test-copy": "node --experimental-strip-types scripts/restore-test-copy.mjs",
+    "package:vsix": "npx --yes @vscode/vsce package --no-dependencies --out releases/antigravity-cursor-1.1.2.vsix",
+    "verify:test-copy": "node --experimental-strip-types scripts/verify-test-copy.mjs",
+    "probe:gateway": "bash scripts/run-gateway-probe.sh",
+    "probe:extension-activation": "node scripts/probe-extension-activation.mjs",
+    "probe:lifecycle": "zsh scripts/run-lifecycle-probe.sh",
+    "probe:tools": "zsh scripts/run-tool-probe.sh"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^2.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rizetngan/antigravity-harness-bridge.git"
+  },
+  "homepage": "https://github.com/rizetngan/antigravity-harness-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/rizetngan/antigravity-harness-bridge/issues"
+  },
+  "keywords": [
+    "acp",
+    "agent-client-protocol",
+    "agent-harness",
+    "ai-models",
+    "antigravity",
+    "bridge",
+    "cursor",
+    "vscode-extension"
+  ]
+}

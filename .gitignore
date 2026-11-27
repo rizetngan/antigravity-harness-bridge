@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+.vscode-test/
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+releases/*.vsix
+releases/*.zip
+
+.local-acceptance/

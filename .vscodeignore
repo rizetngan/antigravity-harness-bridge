@@ -1,0 +1,16 @@
+src/**
+tests/**
+scripts/**
+docs/**
+node_modules/**
+.git/**
+.vscode/**
+*.log
+AGENTS.md
+.gitignore
+tsconfig.json
+dist/extension.js
+
+.local-acceptance/**
+releases/**
+.tmp-*
